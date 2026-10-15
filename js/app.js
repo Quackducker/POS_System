@@ -1,8 +1,9 @@
 const pageDefinitions = {
+  login: { title: 'Login', eyebrow: 'WELCOME', description: 'Sign in to start managing your store.' },
   dashboard: { title: 'Dashboard', eyebrow: 'OVERVIEW', description: 'A clear view of today’s store activity.' },
   products: { title: 'Products', eyebrow: 'CATALOG', description: 'Browse and search the product catalog.' },
   customers: { title: 'Customers', eyebrow: 'RELATIONSHIPS', description: 'Find customer records and account details.' },
-  sales: { title: 'Sales', eyebrow: 'TRANSACTIONS', description: 'Review sales recorded in your POS database.' },
+  sales: { title: 'Sales', eyebrow: 'TRANSACTIONS', description: 'Process a transaction and review today’s payments.' },
   history: { title: 'Sales history', eyebrow: 'TRANSACTIONS', description: 'Review the latest recorded transactions.' },
   reports: { title: 'Reports', eyebrow: 'PERFORMANCE', description: 'A summary of sales and catalog activity.' },
   users: { title: 'Users', eyebrow: 'TEAM', description: 'View user records available to this account.' },
@@ -20,7 +21,7 @@ const tableNames = {
 };
 
 const pageKey = window.location.pathname.split('/').pop().replace('.html', '') || 'dashboard';
-const page = pageDefinitions[pageKey] ? pageKey : 'dashboard';
+const page = pageDefinitions[pageKey] ? pageKey : (window.location.pathname.endsWith('/login.html') ? 'login' : 'dashboard');
 const definition = pageDefinitions[page];
 const app = document.querySelector('#app');
 let supabase;
@@ -181,7 +182,7 @@ function getDate(row) {
 }
 
 async function renderDashboard() {
-  app.innerHTML = `${pageHeader('<a class="button button-primary" href="views/sales.html"><span aria-hidden="true">＋</span> View sales</a>')}
+  app.innerHTML = `${pageHeader('<a class="button button-primary" href="views/sales.html"><span aria-hidden="true">＋</span> Open POS</a>')}
     <section class="metric-grid" aria-label="Store summary">
       ${metricCard('Products', '<span data-product-count>—</span>', 'In your catalog', 'metric-green')}
       ${metricCard('Customers', '<span data-customer-count>—</span>', 'Customer records', 'metric-orange')}
@@ -189,8 +190,23 @@ async function renderDashboard() {
       ${metricCard('Recorded revenue', '<span data-sales-total>—</span>', 'Based on available sales data', 'metric-lime')}
     </section>
     <section class="dashboard-grid">
-      <article class="data-panel recent-panel"><div class="panel-heading"><div><h2>Recent sales</h2><p>Latest transactions in the database</p></div><a class="text-link" href="views/sales.html">View all <span aria-hidden="true">→</span></a></div><div data-recent-sales class="table-content"><div class="loading-state"><span class="loader"></span>Loading activity</div></div></article>
-      <aside class="quick-panel"><p class="eyebrow">SHORTCUTS</p><h2>Go to work</h2><a href="views/products.html"><span class="shortcut-symbol">▦</span><span><strong>Product catalog</strong><small>Search inventory records</small></span><b aria-hidden="true">→</b></a><a href="views/customers.html"><span class="shortcut-symbol">◉</span><span><strong>Customer directory</strong><small>Find customer records</small></span><b aria-hidden="true">→</b></a><a href="views/reports.html"><span class="shortcut-symbol">▤</span><span><strong>Reports</strong><small>Review sales performance</small></span><b aria-hidden="true">→</b></a></aside>
+      <article class="data-panel recent-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Recent sales</h2>
+            <p>Latest transactions in the database</p>
+          </div>
+          <a class="text-link" href="views/sales.html">View all <span aria-hidden="true">→</span></a>
+        </div>
+        <div data-recent-sales class="table-content"><div class="loading-state"><span class="loader"></span>Loading activity</div></div>
+      </article>
+      <aside class="quick-panel">
+        <p class="eyebrow">SHORTCUTS</p>
+        <h2>Go to work</h2>
+        <a href="views/products.html"><span class="shortcut-symbol">▦</span><span><strong>Product catalog</strong><small>Search inventory records</small></span><b aria-hidden="true">→</b></a>
+        <a href="views/customers.html"><span class="shortcut-symbol">◉</span><span><strong>Customer directory</strong><small>Find customer records</small></span><b aria-hidden="true">→</b></a>
+        <a href="views/reports.html"><span class="shortcut-symbol">▤</span><span><strong>Reports</strong><small>Review sales performance</small></span><b aria-hidden="true">→</b></a>
+      </aside>
     </section>
     <p class="data-footnote"><span class="live-indicator">LIVE DATA</span> Values are read from your connected Supabase tables.</p>`;
 
@@ -244,6 +260,73 @@ async function renderDashboard() {
   }
   if (anyTableFailed) {
     app.insertAdjacentHTML('beforeend', alertMarkup('Some dashboard values could not be loaded. Confirm the Supabase tables and permissions are configured.'));
+  }
+}
+
+async function renderSales() {
+  app.innerHTML = `
+    <header class="page-heading">
+      <div>
+        <p class="eyebrow">POS TERMINAL</p>
+        <h1>Point of sale</h1>
+        <p class="page-description">Capture sales quickly and keep the checkout flow moving.</p>
+      </div>
+      <div class="page-actions">
+        <button class="button button-secondary" type="button">Hold sale</button>
+        <button class="button button-primary" type="button">Process sale</button>
+      </div>
+    </header>
+    <section class="sale-layout">
+      <article class="data-panel sale-terminal">
+        <div class="panel-heading">
+          <div>
+            <h2>Current transaction</h2>
+            <p>Checkout overview</p>
+          </div>
+          <span class="live-indicator">LIVE</span>
+        </div>
+        <div class="sale-form">
+          <div class="field-grid">
+            <label>Product<select><option>Classic Burger</option><option>Chicken Sandwich</option><option>Fries Bucket</option><option>Soft Drink</option></select></label>
+            <label>Quantity<input type="number" value="1" min="1"></label>
+            <label>Customer<select><option>Walk-in</option><option>Ana Dela Cruz</option><option>Mark Santos</option></select></label>
+            <label>Discount<input type="text" value="0%"></label>
+          </div>
+          <div class="sale-items">
+            <div class="sale-item-head"><span>Item</span><span>Qty</span><span>Price</span><span>Total</span></div>
+            <div class="sale-item-row"><span>Classic Burger</span><span>1</span><span>₱180</span><span>₱180</span></div>
+            <div class="sale-item-row"><span>Fries Bucket</span><span>2</span><span>₱90</span><span>₱180</span></div>
+            <div class="sale-item-row"><span>Soft Drink</span><span>1</span><span>₱60</span><span>₱60</span></div>
+          </div>
+        </div>
+      </article>
+      <aside class="receipt-card">
+        <p class="eyebrow">SUMMARY</p>
+        <h2>Order total</h2>
+        <div class="summary-row"><span>Subtotal</span><strong>₱420</strong></div>
+        <div class="summary-row"><span>VAT</span><strong>₱42</strong></div>
+        <div class="summary-row"><span>Discount</span><strong>₱0</strong></div>
+        <div class="summary-row total"><span>Total</span><strong>₱462</strong></div>
+        <button class="button button-primary wide" type="button">Complete payment</button>
+      </aside>
+    </section>
+    <section class="data-panel recent-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Today’s sales</h2>
+          <p>Recent transactions from your store</p>
+        </div>
+        <a class="text-link" href="views/history.html">View history <span aria-hidden="true">→</span></a>
+      </div>
+      <div data-sales-table class="table-content"></div>
+    </section>`;
+
+  const recent = app.querySelector('[data-sales-table]');
+  try {
+    const rows = await fetchRows('sales');
+    recent.innerHTML = tableMarkup(rows.slice(0, 5));
+  } catch (error) {
+    showFailure(recent, error);
   }
 }
 
@@ -324,6 +407,8 @@ async function renderLogin() {
 
 if (page === 'dashboard') {
   await renderDashboard();
+} else if (page === 'sales') {
+  await renderSales();
 } else if (page === 'reports') {
   await renderReports();
 } else if (page === 'receipt') {
