@@ -4,13 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Dashboard | POS System</title>
+  <link rel="stylesheet" href="./css/app.css">
 </head>
 <body>
   <script type="module" src="./js/navbar.js"></script>
-  <script type="module">
-    import { supabase } from './supabase.js';
-    const { error } = await supabase.from('products').select('product_id').limit(1);
-    console.log(error ? error.message : 'Connected');
-  </script>
+  <main id="app" class="workspace"></main>
+  <script type="module" src="./js/app.js"></script>
 </body>
 </html>
