@@ -95,9 +95,7 @@ async function loadEnrollments() {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
     cell.colSpan = 4;
-    cell.textContent = error.code === '42501'
-      ? 'Sign in with an authorized account to view student enrollments.'
-      : `Could not load enrollments: ${error.message}`;
+    cell.textContent = `Could not load enrollments: ${error.message}`;
     row.append(cell);
     enrollmentRows.append(row);
     return;
@@ -150,7 +148,7 @@ enrollmentForm.addEventListener('submit', async (event) => {
     enrollmentMessage.textContent = error.code === '23505'
       ? 'That College ID is already enrolled.'
       : error.code === '42501'
-        ? 'Sign in with an authorized account to manage student enrollments.'
+        ? 'Enrollment access is unavailable. Check the Supabase table permissions.'
         : `Could not save enrollment: ${error.message}`;
     return;
   }
