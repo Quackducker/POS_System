@@ -1,4 +1,5 @@
 import { listCourses, addCourse, updateCourse, deleteCourse } from '../models/courses.js';
+import { listEnrollments, addEnrollment } from '../models/enrollments.js';
 
 const form = document.querySelector('[data-course-form]');
 const rows = document.querySelector('[data-course-rows]');
@@ -7,6 +8,11 @@ const formTitle = document.querySelector('[data-form-title]');
 const idInput = document.querySelector('[name="course_id"]');
 const codeInput = document.querySelector('[name="course_code"]');
 const nameInput = document.querySelector('[name="course_name"]');
+const enrollmentForm = document.querySelector('[data-enrollment-form]');
+const enrollmentRows = document.querySelector('[data-enrollment-rows]');
+const enrollmentMessage = document.querySelector('[data-enrollment-message]');
+const enrollmentCourseSelect = document.querySelector('[data-enrollment-course]');
+const enrollmentDateInput = document.querySelector('[data-enrollment-date]');
 let courses = [];
 
 function showMessage(text) {
@@ -19,6 +25,25 @@ function resetForm() {
   formTitle.textContent = 'Add course';
 }
 
+function todayAsDateInputValue() {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+function populateEnrollmentCourses() {
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Select a course';
+  enrollmentCourseSelect.replaceChildren(placeholder);
+
+  for (const course of courses) {
+    const option = document.createElement('option');
+    option.value = course.course_id;
+    option.textContent = `${course.course_code} - ${course.course_name}`;
+    enrollmentCourseSelect.append(option);
+  }
+}
+
 async function loadCourses() {
   rows.replaceChildren();
   const { data, error } = await listCourses();
@@ -28,6 +53,7 @@ async function loadCourses() {
   }
 
   courses = data ?? [];
+  populateEnrollmentCourses();
   if (!courses.length) {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
@@ -61,6 +87,77 @@ async function loadCourses() {
     rows.append(row);
   }
 }
+
+async function loadEnrollments() {
+  enrollmentRows.replaceChildren();
+  const { data, error } = await listEnrollments();
+  if (error) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 4;
+    cell.textContent = `Could not load enrollments: ${error.message}`;
+    row.append(cell);
+    enrollmentRows.append(row);
+    return;
+  }
+
+  if (!data?.length) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 4;
+    cell.textContent = 'No students enrolled yet.';
+    row.append(cell);
+    enrollmentRows.append(row);
+    return;
+  }
+
+  for (const enrollment of data) {
+    const row = document.createElement('tr');
+    for (const value of [
+      enrollment.student_name,
+      enrollment.college_id,
+      enrollment.courses?.course_code ?? '—',
+      enrollment.enrollment_date
+    ]) {
+      const cell = document.createElement('td');
+      cell.textContent = value;
+      row.append(cell);
+    }
+    enrollmentRows.append(row);
+  }
+}
+
+enrollmentDateInput.value = todayAsDateInputValue();
+
+enrollmentForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const formData = new FormData(enrollmentForm);
+  const enrollment = {
+    student_name: String(formData.get('student_name')).trim(),
+    college_id: String(formData.get('college_id')).trim(),
+    course_id: Number(formData.get('course_id')),
+    enrollment_date: String(formData.get('enrollment_date'))
+  };
+
+  const submitButton = enrollmentForm.querySelector('[type="submit"]');
+  submitButton.disabled = true;
+  enrollmentMessage.textContent = 'Saving enrollment…';
+  const { error } = await addEnrollment(enrollment);
+  submitButton.disabled = false;
+  if (error) {
+    enrollmentMessage.textContent = error.code === '23505'
+      ? 'That College ID is already enrolled.'
+      : error.code === '42501'
+        ? 'Sign in with an authorized account to manage student enrollments.'
+        : `Could not save enrollment: ${error.message}`;
+    return;
+  }
+
+  enrollmentMessage.textContent = 'Student enrolled.';
+  enrollmentForm.reset();
+  enrollmentDateInput.value = todayAsDateInputValue();
+  await loadEnrollments();
+});
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -115,4 +212,6 @@ rows.addEventListener('click', async (event) => {
 });
 
 document.querySelector('[data-cancel-course]').addEventListener('click', resetForm);
+enrollmentDateInput.value = todayAsDateInputValue();
 loadCourses();
+loadEnrollments();

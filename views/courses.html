@@ -12,11 +12,44 @@
     <header class="page-heading">
       <div>
         <p class="eyebrow">CATALOG</p>
-        <h1>Course management</h1>
-        <p class="page-description">Create and maintain the courses available to customers.</p>
+        <h1>Courses and enrollment</h1>
+        <p class="page-description">Manage course options and register students.</p>
       </div>
     </header>
-    <section class="data-panel" aria-labelledby="course-form-heading">
+    <section class="data-panel course-page-section" aria-labelledby="enrollment-form-heading">
+      <div class="panel-heading">
+        <div>
+          <h2 id="enrollment-form-heading">Enroll student</h2>
+          <p>Enter the student details and choose a course.</p>
+        </div>
+      </div>
+      <form data-enrollment-form class="sale-form">
+        <div class="field-grid">
+          <label>Student name<input name="student_name" autocomplete="name" required></label>
+          <label>College ID<input name="college_id" autocomplete="off" required></label>
+          <label>Course<select name="course_id" data-enrollment-course required><option value="">Loading courses…</option></select></label>
+          <label>Enrollment date<input type="date" name="enrollment_date" data-enrollment-date required></label>
+        </div>
+        <button class="button button-primary" type="submit">Save enrollment</button>
+        <p class="form-message" role="status" aria-live="polite" data-enrollment-message></p>
+      </form>
+    </section>
+    <section class="data-panel course-page-section" aria-labelledby="enrollment-list-heading">
+      <div class="panel-heading">
+        <div>
+          <h2 id="enrollment-list-heading">Enrolled students</h2>
+          <p>Student registrations linked to their selected course.</p>
+        </div>
+        <span class="live-indicator">LIVE DATA</span>
+      </div>
+      <div class="table-content table-scroll">
+        <table>
+          <thead><tr><th scope="col">Student name</th><th scope="col">College ID</th><th scope="col">Course</th><th scope="col">Enrollment date</th></tr></thead>
+          <tbody data-enrollment-rows><tr><td colspan="4">Loading enrollments…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="data-panel course-page-section" aria-labelledby="course-form-heading">
       <div class="panel-heading">
         <div>
           <h2 id="course-form-heading" data-form-title>Add course</h2>
@@ -34,7 +67,7 @@
         <p class="form-message" role="status" aria-live="polite" data-course-message></p>
       </form>
     </section>
-    <section class="data-panel" aria-labelledby="course-list-heading">
+    <section class="data-panel course-page-section" aria-labelledby="course-list-heading">
       <div class="panel-heading">
         <div>
           <h2 id="course-list-heading">Courses</h2>
