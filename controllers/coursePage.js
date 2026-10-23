@@ -172,7 +172,7 @@ enrollmentForm.addEventListener('submit', async (event) => {
   const submitButton = enrollmentForm.querySelector('[type="submit"]');
   submitButton.disabled = true;
   enrollmentMessage.textContent = enrollmentId ? 'Updating enrollment…' : 'Saving enrollment…';
-  const { error } = enrollmentId
+  const { data, error } = enrollmentId
     ? await updateEnrollment(enrollmentId, enrollment)
     : await addEnrollment(enrollment);
   submitButton.disabled = false;
@@ -182,6 +182,11 @@ enrollmentForm.addEventListener('submit', async (event) => {
       : error.code === '42501'
         ? 'Enrollment access is unavailable. Check the Supabase table permissions.'
         : `Could not save enrollment: ${error.message}`;
+    return;
+  }
+
+  if (enrollmentId && !data?.length) {
+    enrollmentMessage.textContent = 'Enrollment was not updated. Check the Supabase update policy and run migration 202610230003.';
     return;
   }
 
