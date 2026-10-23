@@ -3,6 +3,7 @@ const navigationItems = [
   { label: 'Dashboard', path: 'index.html' },
   { label: 'Products', path: 'views/products.html' },
   { label: 'Customers', path: 'views/customers.html' },
+  { label: 'Courses', path: 'views/courses.html' },
   { label: 'Sales', path: 'views/sales.html' },
   { label: 'Reports', path: 'views/reports.html' },
   { label: 'Users', path: 'views/users.html' }
@@ -40,3 +41,4 @@ if (!window.location.pathname.endsWith('/login.html')) {
   navbar.append(links);
   document.body.prepend(navbar);
 }
+
