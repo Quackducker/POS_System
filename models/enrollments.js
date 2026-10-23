@@ -10,3 +10,11 @@ export function listEnrollments() {
 export function addEnrollment(enrollment) {
   return supabase.from('enrollments').insert(enrollment);
 }
+
+export function updateEnrollment(id, enrollment) {
+  return supabase.from('enrollments').update(enrollment).eq('enrollment_id', id);
+}
+
+export function deleteEnrollment(id) {
+  return supabase.from('enrollments').delete().eq('enrollment_id', id);
+}

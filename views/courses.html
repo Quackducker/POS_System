@@ -19,18 +19,20 @@
     <section class="data-panel course-page-section" aria-labelledby="enrollment-form-heading">
       <div class="panel-heading">
         <div>
-          <h2 id="enrollment-form-heading">Enroll student</h2>
+          <h2 id="enrollment-form-heading" data-enrollment-form-title>Enroll student</h2>
           <p>Enter the student details and choose a course.</p>
         </div>
       </div>
       <form data-enrollment-form class="sale-form">
+        <input type="hidden" name="enrollment_id">
         <div class="field-grid">
           <label>Student name<input name="student_name" autocomplete="name" required></label>
           <label>College ID<input name="college_id" autocomplete="off" required></label>
           <label>Course<select name="course_id" data-enrollment-course required><option value="">Loading courses…</option></select></label>
           <label>Enrollment date<input type="date" name="enrollment_date" data-enrollment-date required></label>
         </div>
-        <button class="button button-primary" type="submit">Save enrollment</button>
+        <button class="button button-primary" type="submit" data-enrollment-submit>Save enrollment</button>
+        <button class="button button-secondary" type="button" data-cancel-enrollment hidden>Cancel edit</button>
         <p class="form-message" role="status" aria-live="polite" data-enrollment-message></p>
       </form>
     </section>
@@ -44,8 +46,8 @@
       </div>
       <div class="table-content table-scroll">
         <table>
-          <thead><tr><th scope="col">Student name</th><th scope="col">College ID</th><th scope="col">Course</th><th scope="col">Enrollment date</th></tr></thead>
-          <tbody data-enrollment-rows><tr><td colspan="4">Loading enrollments…</td></tr></tbody>
+          <thead><tr><th scope="col">Student name</th><th scope="col">College ID</th><th scope="col">Course</th><th scope="col">Enrollment date</th><th scope="col">Actions</th></tr></thead>
+          <tbody data-enrollment-rows><tr><td colspan="5">Loading enrollments…</td></tr></tbody>
         </table>
       </div>
     </section>

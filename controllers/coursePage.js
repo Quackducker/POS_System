@@ -1,5 +1,5 @@
 import { listCourses, addCourse, updateCourse, deleteCourse } from '../models/courses.js';
-import { listEnrollments, addEnrollment } from '../models/enrollments.js';
+import { listEnrollments, addEnrollment, updateEnrollment, deleteEnrollment } from '../models/enrollments.js';
 
 const form = document.querySelector('[data-course-form]');
 const rows = document.querySelector('[data-course-rows]');
@@ -13,7 +13,12 @@ const enrollmentRows = document.querySelector('[data-enrollment-rows]');
 const enrollmentMessage = document.querySelector('[data-enrollment-message]');
 const enrollmentCourseSelect = document.querySelector('[data-enrollment-course]');
 const enrollmentDateInput = document.querySelector('[data-enrollment-date]');
+const enrollmentIdInput = enrollmentForm.querySelector('[name="enrollment_id"]');
+const enrollmentFormTitle = document.querySelector('[data-enrollment-form-title]');
+const enrollmentSubmit = document.querySelector('[data-enrollment-submit]');
+const cancelEnrollmentButton = document.querySelector('[data-cancel-enrollment]');
 let courses = [];
+let enrollments = [];
 
 function showMessage(text) {
   message.textContent = text;
@@ -28,6 +33,15 @@ function resetForm() {
 function todayAsDateInputValue() {
   const now = new Date();
   return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+function resetEnrollmentForm() {
+  enrollmentForm.reset();
+  enrollmentIdInput.value = '';
+  enrollmentFormTitle.textContent = 'Enroll student';
+  enrollmentSubmit.textContent = 'Save enrollment';
+  cancelEnrollmentButton.hidden = true;
+  enrollmentDateInput.value = todayAsDateInputValue();
 }
 
 function populateEnrollmentCourses() {
@@ -94,24 +108,25 @@ async function loadEnrollments() {
   if (error) {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
-    cell.colSpan = 4;
+    cell.colSpan = 5;
     cell.textContent = `Could not load enrollments: ${error.message}`;
     row.append(cell);
     enrollmentRows.append(row);
     return;
   }
 
-  if (!data?.length) {
+  enrollments = data ?? [];
+  if (!enrollments.length) {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
-    cell.colSpan = 4;
+    cell.colSpan = 5;
     cell.textContent = 'No students enrolled yet.';
     row.append(cell);
     enrollmentRows.append(row);
     return;
   }
 
-  for (const enrollment of data) {
+  for (const enrollment of enrollments) {
     const row = document.createElement('tr');
     for (const value of [
       enrollment.student_name,
@@ -123,6 +138,20 @@ async function loadEnrollments() {
       cell.textContent = value;
       row.append(cell);
     }
+
+    const actionsCell = document.createElement('td');
+    const editButton = document.createElement('button');
+    const deleteButton = document.createElement('button');
+    editButton.type = 'button';
+    editButton.className = 'button button-secondary';
+    editButton.dataset.editEnrollment = enrollment.enrollment_id;
+    editButton.textContent = 'Edit';
+    deleteButton.type = 'button';
+    deleteButton.className = 'button button-secondary';
+    deleteButton.dataset.deleteEnrollment = enrollment.enrollment_id;
+    deleteButton.textContent = 'Delete';
+    actionsCell.append(editButton, deleteButton);
+    row.append(actionsCell);
     enrollmentRows.append(row);
   }
 }
@@ -131,6 +160,7 @@ enrollmentDateInput.value = todayAsDateInputValue();
 
 enrollmentForm.addEventListener('submit', async (event) => {
   event.preventDefault();
+  const enrollmentId = enrollmentIdInput.value;
   const formData = new FormData(enrollmentForm);
   const enrollment = {
     student_name: String(formData.get('student_name')).trim(),
@@ -141,8 +171,10 @@ enrollmentForm.addEventListener('submit', async (event) => {
 
   const submitButton = enrollmentForm.querySelector('[type="submit"]');
   submitButton.disabled = true;
-  enrollmentMessage.textContent = 'Saving enrollment…';
-  const { error } = await addEnrollment(enrollment);
+  enrollmentMessage.textContent = enrollmentId ? 'Updating enrollment…' : 'Saving enrollment…';
+  const { error } = enrollmentId
+    ? await updateEnrollment(enrollmentId, enrollment)
+    : await addEnrollment(enrollment);
   submitButton.disabled = false;
   if (error) {
     enrollmentMessage.textContent = error.code === '23505'
@@ -153,10 +185,43 @@ enrollmentForm.addEventListener('submit', async (event) => {
     return;
   }
 
-  enrollmentMessage.textContent = 'Student enrolled.';
-  enrollmentForm.reset();
-  enrollmentDateInput.value = todayAsDateInputValue();
+  enrollmentMessage.textContent = enrollmentId ? 'Enrollment updated.' : 'Student enrolled.';
+  resetEnrollmentForm();
   await loadEnrollments();
+});
+
+cancelEnrollmentButton.addEventListener('click', resetEnrollmentForm);
+
+enrollmentRows.addEventListener('click', async (event) => {
+  const editId = event.target.dataset.editEnrollment;
+  const deleteId = event.target.dataset.deleteEnrollment;
+
+  if (editId) {
+    const enrollment = enrollments.find((item) => String(item.enrollment_id) === editId);
+    if (!enrollment) return;
+    enrollmentIdInput.value = enrollment.enrollment_id;
+    enrollmentForm.elements.namedItem('student_name').value = enrollment.student_name;
+    enrollmentForm.elements.namedItem('college_id').value = enrollment.college_id;
+    enrollmentCourseSelect.value = String(enrollment.course_id);
+    enrollmentDateInput.value = enrollment.enrollment_date;
+    enrollmentFormTitle.textContent = 'Edit enrollment';
+    enrollmentSubmit.textContent = 'Update enrollment';
+    cancelEnrollmentButton.hidden = false;
+    enrollmentForm.elements.namedItem('student_name').focus();
+    return;
+  }
+
+  if (deleteId && window.confirm('Delete this student enrollment?')) {
+    const { error } = await deleteEnrollment(deleteId);
+    if (error) {
+      enrollmentMessage.textContent = `Could not delete enrollment: ${error.message}`;
+      return;
+    }
+
+    if (enrollmentIdInput.value === deleteId) resetEnrollmentForm();
+    enrollmentMessage.textContent = 'Enrollment deleted.';
+    await loadEnrollments();
+  }
 });
 
 form.addEventListener('submit', async (event) => {

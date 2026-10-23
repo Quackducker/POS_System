@@ -274,6 +274,7 @@ h1 {
 .button-secondary { border-color: var(--line); background: #fff; color: var(--ink); }
 .button-secondary:hover { background: #f4f8f4; }
 .button:disabled { cursor: wait; opacity: 0.65; }
+.button[hidden] { display: none; }
 
 .metric-grid {
   display: grid;
