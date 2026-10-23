@@ -12,11 +12,15 @@ create index if not exists enrollments_course_id_idx
 
 alter table public.enrollments enable row level security;
 
-grant select, insert on public.enrollments to authenticated;
-grant usage, select on sequence public.enrollments_enrollment_id_seq to authenticated;
+grant select, insert on public.enrollments to anon, authenticated;
+grant usage, select on sequence public.enrollments_enrollment_id_seq to anon, authenticated;
 
-create policy enrollments_select_authenticated
-  on public.enrollments for select to authenticated using (true);
+drop policy if exists enrollments_select_authenticated on public.enrollments;
+drop policy if exists enrollments_select_public on public.enrollments;
+create policy enrollments_select_public
+  on public.enrollments for select to anon, authenticated using (true);
 
-create policy enrollments_insert_authenticated
-  on public.enrollments for insert to authenticated with check (true);
+drop policy if exists enrollments_insert_authenticated on public.enrollments;
+drop policy if exists enrollments_insert_public on public.enrollments;
+create policy enrollments_insert_public
+  on public.enrollments for insert to anon, authenticated with check (true);
