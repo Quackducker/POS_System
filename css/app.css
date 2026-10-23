@@ -308,6 +308,7 @@ h1 {
   background: var(--paper);
   box-shadow: var(--shadow);
 }
+.course-page-section { margin-bottom: 20px; }
 
 .panel-heading {
   display: flex;
