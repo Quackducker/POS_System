@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+  <meta charset='UTF-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1'>
+  <title>Course Management</title>
+  <link rel='stylesheet' href='../css/app.css'>
+  <style>
+    .box { max-width: 900px; margin: 20px auto; padding: 16px; background: #fff; border-radius: 8px; }
+    .box input { padding: 8px; margin: 4px 0; width: 100%; }
+    .box table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    .box th, .box td { text-align: left; padding: 8px; border-bottom: 1px solid #ddd; }
+    #msg { padding: 8px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class='box'>
+    <h2>Course Management</h2>
+    <div id='msg'></div>
+    <h3 id='formTitle'>Add Course</h3>
+    <form id='courseForm'>
+      <input type='hidden' id='courseId'>
+      <label>Course code (example: BSIT)</label>
+      <input id='code' required>
+      <label>Course name</label>
+      <input id='name' required>
+      <button type='submit'>Save</button>
+      <button type='button' id='cancelBtn'>Cancel</button>
+    </form>
+    <h3>Courses</h3>
+    <table>
+      <thead><tr><th>Code</th><th>Name</th><th>Actions</th></tr></thead>
+      <tbody id='courseRows'></tbody>
+    </table>
+  </div>
+  <script type='module' src='../js/navbar.js'></script>
+  <script type='module' src='../controllers/coursePage.js'></script>
+</body>
+</html>
