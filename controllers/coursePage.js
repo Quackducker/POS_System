@@ -95,7 +95,9 @@ async function loadEnrollments() {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
     cell.colSpan = 4;
-    cell.textContent = `Could not load enrollments: ${error.message}`;
+    cell.textContent = error.code === '42501'
+      ? 'Sign in with an authorized account to view student enrollments.'
+      : `Could not load enrollments: ${error.message}`;
     row.append(cell);
     enrollmentRows.append(row);
     return;
@@ -212,6 +214,5 @@ rows.addEventListener('click', async (event) => {
 });
 
 document.querySelector('[data-cancel-course]').addEventListener('click', resetForm);
-enrollmentDateInput.value = todayAsDateInputValue();
 loadCourses();
 loadEnrollments();
