@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Courses | POS System</title>
+  <link rel="stylesheet" href="../css/app.css">
+</head>
+<body>
+  <script type="module" src="../js/navbar.js"></script>
+  <main class="workspace">
+    <header class="page-heading">
+      <div>
+        <p class="eyebrow">CATALOG</p>
+        <h1>Course management</h1>
+        <p class="page-description">Create and maintain the courses available to customers.</p>
+      </div>
+    </header>
+    <section class="data-panel" aria-labelledby="course-form-heading">
+      <div class="panel-heading">
+        <div>
+          <h2 id="course-form-heading" data-form-title>Add course</h2>
+          <p>Course codes are shown in the customer form.</p>
+        </div>
+      </div>
+      <form data-course-form class="sale-form">
+        <input type="hidden" name="course_id">
+        <div class="field-grid">
+          <label>Course code<input name="course_code" autocomplete="off" placeholder="BSIT" required></label>
+          <label>Course name<input name="course_name" autocomplete="off" placeholder="Bachelor of Science in Information Technology" required></label>
+        </div>
+        <button class="button button-primary" type="submit">Save course</button>
+        <button class="button button-secondary" type="button" data-cancel-course>Cancel</button>
+        <p class="form-message" role="status" aria-live="polite" data-course-message></p>
+      </form>
+    </section>
+    <section class="data-panel" aria-labelledby="course-list-heading">
+      <div class="panel-heading">
+        <div>
+          <h2 id="course-list-heading">Courses</h2>
+          <p>Courses currently available in the database.</p>
+        </div>
+        <span class="live-indicator">LIVE DATA</span>
+      </div>
+      <div class="table-content table-scroll">
+        <table>
+          <thead><tr><th scope="col">Code</th><th scope="col">Name</th><th scope="col">Actions</th></tr></thead>
+          <tbody data-course-rows><tr><td colspan="3">Loading courses…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="../controllers/coursePage.js"></script>
+</body>
+</html>
