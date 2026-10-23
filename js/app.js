@@ -383,6 +383,125 @@ async function renderReceipt() {
   }
 }
 
+// ===== NEW (1 of 2): the Customers page with the data entry form and Course dropdown =====
+async function renderCustomers() {
+  const customerModel = await import('../models/customers.js');
+  const courseModel = await import('../models/courses.js');
+
+  app.innerHTML = `${pageHeader(`<label class="search-box"><span class="search-icon" aria-hidden="true">⌕</span><input type="search" data-search placeholder="Search customers" aria-label="Search customers"></label>`)}
+    <section class="data-panel" aria-label="Add customer">
+      <div class="panel-heading"><div><h2>Add customer</h2><p>Fill in the details and choose a course.</p></div></div>
+      <form data-customer-form class="sale-form">
+        <div class="field-grid">
+          <label>Customer name<input name="customer_name" required></label>
+          <label>Contact number<input name="contact_number"></label>
+          <label>Email<input name="email" type="email"></label>
+          <label>Address<input name="address"></label>
+          <label>Course<select name="course_id" data-course-select required><option value="">Select a course</option></select></label>
+        </div>
+        <button class="button button-primary" type="submit">Save customer</button>
+        <p class="form-message" aria-live="polite" data-form-message></p>
+      </form>
+    </section>
+    <section class="data-panel" aria-label="Customer records">
+      <div class="panel-heading"><div><h2>All customers</h2><p class="record-count" data-record-count>Loading records…</p></div><span class="live-indicator">LIVE DATA</span></div>
+      <div data-table-content class="table-content"><div class="loading-state"><span class="loader"></span>Loading from Supabase</div></div>
+    </section>`;
+
+  const form = app.querySelector('[data-customer-form]');
+  const message = app.querySelector('[data-form-message]');
+  const select = app.querySelector('[data-course-select]');
+  const container = app.querySelector('[data-table-content]');
+  let allRows = [];
+
+  // EXAM STEP 4: fill the Course dropdown from the courses table
+  async function loadCourseOptions() {
+    const { data, error } = await courseModel.listCourses();
+    if (error) {
+      message.textContent = 'Could not load courses: ' + error.message;
+      return;
+    }
+    for (const course of data) {
+      const option = document.createElement('option');
+      option.value = course.course_id;
+      option.textContent = course.course_code;
+      select.append(option);
+    }
+  }
+
+  // EXAM STEP 6: the table now has a Course column
+  function customerTable(rows) {
+    if (!rows.length) {
+      return `<div class="empty-state"><span class="empty-symbol" aria-hidden="true">+</span><h2>No customers found</h2><p>Add a customer using the form above.</p></div>`;
+    }
+    let body = '';
+    for (const row of rows) {
+      body += `<tr>
+        <td>${escapeHtml(row.customer_code ?? '—')}</td>
+        <td>${escapeHtml(row.customer_name)}</td>
+        <td>${escapeHtml(row.contact_number ?? '—')}</td>
+        <td>${escapeHtml(row.email ?? '—')}</td>
+        <td>${escapeHtml(row.courses ? row.courses.course_code : '—')}</td>
+      </tr>`;
+    }
+    return `<div class="table-scroll"><table><thead><tr><th scope="col">Code</th><th scope="col">Name</th><th scope="col">Contact</th><th scope="col">Email</th><th scope="col">Course</th></tr></thead><tbody>${body}</tbody></table></div>`;
+  }
+
+  async function loadCustomers() {
+    const { data, error } = await customerModel.listCustomers();
+    if (error) {
+      app.querySelector('[data-record-count]').textContent = 'Data unavailable';
+      showFailure(container, error);
+      return;
+    }
+    allRows = data;
+    app.querySelector('[data-record-count]').textContent = `${data.length} ${data.length === 1 ? 'record' : 'records'}`;
+    container.innerHTML = customerTable(allRows);
+  }
+
+  // Search box
+  app.querySelector('[data-search]').addEventListener('input', (event) => {
+    const term = event.target.value.trim().toLowerCase();
+    const filtered = allRows.filter((row) =>
+      [row.customer_code, row.customer_name, row.contact_number, row.email, row.courses?.course_code]
+        .join(' ').toLowerCase().includes(term)
+    );
+    container.innerHTML = customerTable(filtered);
+  });
+
+  // EXAM STEP 5: save the customer together with the selected course
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const formData = new FormData(form);
+    const customer = {
+      customer_name: String(formData.get('customer_name')).trim(),
+      contact_number: String(formData.get('contact_number')).trim() || null,
+      email: String(formData.get('email')).trim() || null,
+      address: String(formData.get('address')).trim() || null,
+      course_id: formData.get('course_id') ? Number(formData.get('course_id')) : null
+    };
+
+    // Validation
+    if (!customer.customer_name) { message.textContent = 'Customer name is required.'; return; }
+    if (!customer.course_id) { message.textContent = 'Please select a course.'; return; }
+
+    const button = form.querySelector('button');
+    button.disabled = true;
+    message.textContent = 'Saving…';
+    const { error } = await customerModel.addCustomer(customer);
+    button.disabled = false;
+
+    if (error) { message.textContent = 'Could not save: ' + error.message; return; }
+    message.textContent = 'Customer saved.';
+    form.reset();
+    loadCustomers();
+  });
+
+  await loadCourseOptions();
+  await loadCustomers();
+}
+// ===== END NEW (1 of 2) =====
+
 async function renderLogin() {
   app.innerHTML = `<section class="login-panel"><p class="eyebrow">POS SYSTEM</p><h1>Welcome back</h1><p class="page-description">Sign in to your store workspace.</p><form data-login-form><label>Email address<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button class="button button-primary" type="submit">Sign in</button><p class="form-message" aria-live="polite"></p></form></section>`;
   const form = app.querySelector('[data-login-form]');
@@ -413,6 +532,9 @@ if (page === 'dashboard') {
   await renderReports();
 } else if (page === 'receipt') {
   await renderReceipt();
+} else if (page === 'customers') {
+  // NEW (2 of 2): use the new Customers page
+  await renderCustomers();
 } else if (page === 'login') {
   await renderLogin();
 } else {
