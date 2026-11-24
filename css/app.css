@@ -476,6 +476,70 @@ tbody tr:hover { background: #f7faf7; }
   outline-offset: 2px;
 }
 
+.login-panel [data-login-form],
+.login-panel [data-signup-form] {
+  grid-template-columns: 1fr;
+}
+
+.login-panel [data-login-form] .button,
+.login-panel [data-signup-form] .button {
+  width: 100%;
+}
+
+.mock-accounts {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.mock-accounts__title {
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.mock-accounts__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mock-accounts__grid button {
+  min-height: 58px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  padding: 8px 10px;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.mock-accounts__grid button:hover,
+.mock-accounts__grid button:focus-visible {
+  border-color: var(--green);
+  background: var(--green-pale);
+  outline: 2px solid var(--orange);
+  outline-offset: 1px;
+}
+
+.mock-accounts__grid strong,
+.mock-accounts__grid span {
+  display: block;
+}
+
+.mock-accounts__grid strong {
+  margin-bottom: 3px;
+  font-size: 0.82rem;
+}
+
+.mock-accounts__grid span {
+  color: var(--muted);
+  font: 400 0.68rem/1.3 'Space Mono', monospace;
+}
+
 @media (max-width: 900px) {
   .workspace { width: min(100% - 40px, 760px); padding-top: 34px; }
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -500,6 +564,7 @@ tbody tr:hover { background: #f7faf7; }
   th, td { padding: 11px 12px; }
   .quick-panel { padding: 18px 16px 5px; }
   .login-panel { margin-top: 3vh; padding: 25px 21px; }
+  .mock-accounts__grid { grid-template-columns: 1fr; }
 }
 
 @media print {

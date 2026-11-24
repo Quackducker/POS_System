@@ -26,6 +26,38 @@ if (!window.location.pathname.endsWith('/login.html')) {
   navbar.append(links);
 
   async function buildNavigation() {
+    const demoProfile = localStorage.getItem('pos_demo_profile');
+    if (demoProfile) {
+      try {
+        const profile = JSON.parse(demoProfile);
+        const role = profile.role;
+        const displayName = profile.full_name;
+        for (const item of allNavigationItems) {
+          if (!item.roles.includes(role)) continue;
+          const link = document.createElement('a');
+          const destination = new URL(item.path, appRoot);
+          link.className = 'app-navbar__link';
+          link.href = destination.href;
+          link.textContent = item.label;
+          if (destination.href === window.location.href) link.setAttribute('aria-current', 'page');
+          const listItem = document.createElement('li');
+          listItem.append(link);
+          links.append(listItem);
+        }
+        const sessionArea = document.createElement('span');
+        sessionArea.className = 'app-navbar__session';
+        const name = document.createElement('span');
+        name.className = 'app-navbar__user';
+        name.textContent = `${displayName} · ${role} (Demo)`;
+        const logout = document.createElement('button');
+        logout.type = 'button'; logout.className = 'app-navbar__logout'; logout.textContent = 'Logout';
+        logout.addEventListener('click', () => { localStorage.removeItem('pos_demo_profile'); window.location.href = new URL('login.html', appRoot).href; });
+        sessionArea.append(name, logout);
+        navbar.append(sessionArea);
+        return;
+      } catch { localStorage.removeItem('pos_demo_profile'); }
+    }
+
     const { data: { session } } = await supabase.auth.getSession();
     let role = 'Cashier';
     let displayName = '';
@@ -67,6 +99,7 @@ if (!window.location.pathname.endsWith('/login.html')) {
     logout.className = 'app-navbar__logout';
     logout.textContent = 'Logout';
     logout.addEventListener('click', async () => {
+      localStorage.removeItem('pos_demo_profile');
       await supabase.auth.signOut();
       window.location.href = new URL('login.html', appRoot).href;
     });

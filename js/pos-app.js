@@ -7,6 +7,13 @@ const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP'
 const cart = [];
 let sessionProfile = null;
 
+const mockAccounts = {
+  admin: { username: 'admin', password: 'admin123', role: 'Administrator', full_name: 'System Administrator' },
+  manager: { username: 'manager', password: 'manager123', role: 'Manager', full_name: 'Store Manager' },
+  cashier: { username: 'cashier', password: 'cashier123', role: 'Cashier', full_name: 'Store Cashier' },
+  inventory: { username: 'inventory', password: 'inventory123', role: 'Inventory Staff', full_name: 'Inventory Staff' }
+};
+
 const pageInfo = {
   dashboard: ['OVERVIEW', 'Dashboard', 'Your store activity and inventory at a glance.'],
   products: ['CATALOG', 'Products', 'Manage products and monitor inventory.'],
@@ -38,6 +45,16 @@ function failure(message) {
 }
 
 async function loadProfile() {
+  const demoProfile = localStorage.getItem('pos_demo_profile');
+  if (demoProfile) {
+    try {
+      sessionProfile = JSON.parse(demoProfile);
+      return { demo: true };
+    } catch {
+      localStorage.removeItem('pos_demo_profile');
+    }
+  }
+
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return null;
   const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
@@ -406,8 +423,51 @@ async function renderUsers() {
 }
 
 async function renderLogin() {
-  app.innerHTML = `<section class="login-panel"><p class="eyebrow">POS SYSTEM</p><h1>Welcome back</h1><p class="page-description">Sign in to your store workspace.</p><form data-login-form><label>Username<input name="username" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button class="button button-primary" type="submit">Login</button><p class="form-message" data-login-message></p></form></section>`;
+  app.innerHTML = `<section class="login-panel"><p class="eyebrow">POS SYSTEM</p><h1>Welcome back</h1><p class="page-description">Sign in to your store workspace.</p><div data-login-view><form data-login-form><label>Username<input name="username" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button class="button button-primary" type="submit">Login</button><button class="button button-secondary" type="button" data-show-signup>Create account</button><p class="form-message" data-login-message></p></form><div class="mock-accounts"><p class="mock-accounts__title">Demo role accounts</p><div class="mock-accounts__grid"><button type="button" data-mock="admin"><strong>Administrator</strong><span>admin / admin123</span></button><button type="button" data-mock="manager"><strong>Manager</strong><span>manager / manager123</span></button><button type="button" data-mock="cashier"><strong>Cashier</strong><span>cashier / cashier123</span></button><button type="button" data-mock="inventory"><strong>Inventory Staff</strong><span>inventory / inventory123</span></button></div></div></div><div data-signup-view hidden><form data-signup-form><label>Full name<input name="full_name" autocomplete="name" required></label><label>Username<input name="username" autocomplete="username" required></label><label>Email<input name="email" type="email" autocomplete="email" required></label><label>Password<input name="password" type="password" minlength="6" autocomplete="new-password" required></label><button class="button button-primary" type="submit">Create account</button><button class="button button-secondary" type="button" data-show-login>Back to login</button><p class="form-message" data-signup-message></p></form></div></section>`;
   const form = app.querySelector('[data-login-form]');
+  const loginView = app.querySelector('[data-login-view]');
+  const signupView = app.querySelector('[data-signup-view]');
+
+  app.querySelector('[data-show-signup]').addEventListener('click', () => { loginView.hidden = true; signupView.hidden = false; });
+  app.querySelector('[data-show-login]').addEventListener('click', () => { signupView.hidden = true; loginView.hidden = false; });
+
+  for (const preset of app.querySelectorAll('[data-mock]')) {
+    preset.addEventListener('click', () => {
+      const account = mockAccounts[preset.dataset.mock];
+      form.elements.username.value = account.username;
+      form.elements.password.value = account.password;
+      app.querySelector('[data-login-message]').textContent = `${account.role} demo credentials filled.`;
+    });
+  }
+
+  app.querySelector('[data-signup-form]').addEventListener('submit', async event => {
+    event.preventDefault();
+    const signupForm = event.currentTarget;
+    const data = new FormData(signupForm);
+    const message = app.querySelector('[data-signup-message]');
+    const fullName = String(data.get('full_name')).trim();
+    const username = String(data.get('username')).trim();
+    const email = String(data.get('email')).trim().toLowerCase();
+    const password = String(data.get('password'));
+    if (!fullName || !username || !email || password.length < 6) {
+      message.textContent = 'Complete all fields with a password of at least 6 characters.';
+      return;
+    }
+    const usernameCheck = await supabase.from('profiles').select('id').eq('username', username).maybeSingle();
+    if (usernameCheck.data) { message.textContent = 'That username already exists.'; return; }
+    const { data: created, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { username, full_name: fullName, role: 'Cashier' } }
+    });
+    if (error) { message.textContent = error.message; return; }
+    if (created.user) {
+      await supabase.from('profiles').upsert({ id: created.user.id, username, full_name: fullName, email, role: 'Cashier', active: true });
+    }
+    message.textContent = 'Cashier account created. You can now log in.';
+    signupForm.reset();
+  });
+
   form.addEventListener('submit', async event => {
     event.preventDefault();
     const data = new FormData(form); const message = app.querySelector('[data-login-message]');
@@ -415,6 +475,20 @@ async function renderLogin() {
     const password = String(data.get('password'));
     if (!credential || !password) { message.textContent = 'Username and password are required.'; return; }
     const button = form.querySelector('button'); button.disabled = true; message.textContent = 'Signing in…';
+
+    const mockAccount = Object.values(mockAccounts).find(account => account.username === credential && account.password === password);
+    if (mockAccount) {
+      localStorage.setItem('pos_demo_profile', JSON.stringify({
+        id: `demo-${mockAccount.role.toLowerCase().replaceAll(' ', '-')}`,
+        username: mockAccount.username,
+        full_name: mockAccount.full_name,
+        role: mockAccount.role,
+        active: true,
+        demo: true
+      }));
+      window.location.href = 'index.html';
+      return;
+    }
 
     let email = credential.includes('@') ? credential : null;
     if (!email) {
