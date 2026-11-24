@@ -383,21 +383,18 @@ async function renderReceipt() {
   }
 }
 
-// ===== NEW (1 of 2): the Customers page with the data entry form and Course dropdown =====
 async function renderCustomers() {
   const customerModel = await import('../models/customers.js');
-  const courseModel = await import('../models/courses.js');
 
   app.innerHTML = `${pageHeader(`<label class="search-box"><span class="search-icon" aria-hidden="true">⌕</span><input type="search" data-search placeholder="Search customers" aria-label="Search customers"></label>`)}
     <section class="data-panel" aria-label="Add customer">
-      <div class="panel-heading"><div><h2>Add customer</h2><p>Fill in the details and choose a course.</p></div></div>
+      <div class="panel-heading"><div><h2>Add customer</h2><p>Fill in the customer details.</p></div></div>
       <form data-customer-form class="sale-form">
         <div class="field-grid">
           <label>Customer name<input name="customer_name" required></label>
           <label>Contact number<input name="contact_number"></label>
           <label>Email<input name="email" type="email"></label>
           <label>Address<input name="address"></label>
-          <label>Course<select name="course_id" data-course-select required><option value="">Select a course</option></select></label>
         </div>
         <button class="button button-primary" type="submit">Save customer</button>
         <p class="form-message" aria-live="polite" data-form-message></p>
@@ -410,26 +407,9 @@ async function renderCustomers() {
 
   const form = app.querySelector('[data-customer-form]');
   const message = app.querySelector('[data-form-message]');
-  const select = app.querySelector('[data-course-select]');
   const container = app.querySelector('[data-table-content]');
   let allRows = [];
 
-  // EXAM STEP 4: fill the Course dropdown from the courses table
-  async function loadCourseOptions() {
-    const { data, error } = await courseModel.listCourses();
-    if (error) {
-      message.textContent = 'Could not load courses: ' + error.message;
-      return;
-    }
-    for (const course of data) {
-      const option = document.createElement('option');
-      option.value = course.course_id;
-      option.textContent = course.course_code;
-      select.append(option);
-    }
-  }
-
-  // EXAM STEP 6: the table now has a Course column
   function customerTable(rows) {
     if (!rows.length) {
       return `<div class="empty-state"><span class="empty-symbol" aria-hidden="true">+</span><h2>No customers found</h2><p>Add a customer using the form above.</p></div>`;
@@ -441,10 +421,10 @@ async function renderCustomers() {
         <td>${escapeHtml(row.customer_name)}</td>
         <td>${escapeHtml(row.contact_number ?? '—')}</td>
         <td>${escapeHtml(row.email ?? '—')}</td>
-        <td>${escapeHtml(row.courses ? row.courses.course_code : '—')}</td>
+        <td>${escapeHtml(row.address ?? '—')}</td>
       </tr>`;
     }
-    return `<div class="table-scroll"><table><thead><tr><th scope="col">Code</th><th scope="col">Name</th><th scope="col">Contact</th><th scope="col">Email</th><th scope="col">Course</th></tr></thead><tbody>${body}</tbody></table></div>`;
+    return `<div class="table-scroll"><table><thead><tr><th scope="col">Code</th><th scope="col">Name</th><th scope="col">Contact</th><th scope="col">Email</th><th scope="col">Address</th></tr></thead><tbody>${body}</tbody></table></div>`;
   }
 
   async function loadCustomers() {
@@ -459,17 +439,15 @@ async function renderCustomers() {
     container.innerHTML = customerTable(allRows);
   }
 
-  // Search box
   app.querySelector('[data-search]').addEventListener('input', (event) => {
     const term = event.target.value.trim().toLowerCase();
     const filtered = allRows.filter((row) =>
-      [row.customer_code, row.customer_name, row.contact_number, row.email, row.courses?.course_code]
+      [row.customer_code, row.customer_name, row.contact_number, row.email, row.address]
         .join(' ').toLowerCase().includes(term)
     );
     container.innerHTML = customerTable(filtered);
   });
 
-  // EXAM STEP 5: save the customer together with the selected course
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const formData = new FormData(form);
@@ -477,13 +455,10 @@ async function renderCustomers() {
       customer_name: String(formData.get('customer_name')).trim(),
       contact_number: String(formData.get('contact_number')).trim() || null,
       email: String(formData.get('email')).trim() || null,
-      address: String(formData.get('address')).trim() || null,
-      course_id: formData.get('course_id') ? Number(formData.get('course_id')) : null
+      address: String(formData.get('address')).trim() || null
     };
 
-    // Validation
     if (!customer.customer_name) { message.textContent = 'Customer name is required.'; return; }
-    if (!customer.course_id) { message.textContent = 'Please select a course.'; return; }
 
     const button = form.querySelector('button');
     button.disabled = true;
@@ -497,10 +472,8 @@ async function renderCustomers() {
     loadCustomers();
   });
 
-  await loadCourseOptions();
   await loadCustomers();
 }
-// ===== END NEW (1 of 2) =====
 
 async function renderLogin() {
   app.innerHTML = `<section class="login-panel"><p class="eyebrow">POS SYSTEM</p><h1>Welcome back</h1><p class="page-description">Sign in to your store workspace.</p><form data-login-form><label>Email address<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button class="button button-primary" type="submit">Sign in</button><p class="form-message" aria-live="polite"></p></form></section>`;

@@ -3,7 +3,7 @@ import { supabase } from '../supabase.js';
 export function listCustomers() {
 	return supabase
 		.from('customers')
-		.select('*, courses(course_code)')
+		.select('*')
 		.order('customer_name');
 }
 
