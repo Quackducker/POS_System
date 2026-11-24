@@ -445,6 +445,37 @@ tbody tr:hover { background: #f7faf7; }
 .print-receipt hr { border: 0; border-top: 1px dashed var(--line); }
 .receipt-thanks { margin: 24px 0 0; text-align: center; font-weight: 700; }
 
+.app-navbar__session {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.app-navbar__user {
+  color: #dfe9e6;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.app-navbar__logout {
+  min-height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 4px;
+  background: transparent;
+  padding: 0 10px;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.app-navbar__logout:hover,
+.app-navbar__logout:focus-visible {
+  background: #27514f;
+  outline: 2px solid #d89b42;
+  outline-offset: 2px;
+}
+
 @media (max-width: 900px) {
   .workspace { width: min(100% - 40px, 760px); padding-top: 34px; }
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

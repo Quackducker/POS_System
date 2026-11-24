@@ -39,9 +39,34 @@ function failure(message) {
 
 async function loadProfile() {
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return;
-  const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-  sessionProfile = data || { role: 'Cashier', full_name: session.user.email };
+  if (!session) return null;
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+  if (error || !data) return null;
+  if (data.active === false) {
+    await supabase.auth.signOut();
+    return null;
+  }
+  sessionProfile = data;
+  return session;
+}
+
+function canAccess(targetPage) {
+  const role = sessionProfile?.role || 'Cashier';
+  const access = {
+    dashboard: ['Administrator', 'Manager', 'Cashier', 'Inventory Staff'],
+    products: ['Administrator', 'Manager', 'Inventory Staff'],
+    customers: ['Administrator', 'Manager', 'Cashier'],
+    sales: ['Administrator', 'Manager', 'Cashier'],
+    history: ['Administrator', 'Manager', 'Cashier'],
+    receipt: ['Administrator', 'Manager', 'Cashier'],
+    reports: ['Administrator', 'Manager'],
+    users: ['Administrator']
+  };
+  return (access[targetPage] || []).includes(role);
+}
+
+function accessDenied() {
+  app.innerHTML = `${header()}<div class="empty-state"><span class="empty-symbol">!</span><h2>Access denied</h2><p>Your role does not have permission to open this module.</p><a class="button button-secondary" href="${page === 'dashboard' ? 'index.html' : '../index.html'}">Return to dashboard</a></div>`;
 }
 
 async function renderDashboard() {
@@ -320,31 +345,102 @@ async function renderReports() {
 }
 
 async function renderUsers() {
-  app.innerHTML = `${header()}<section class="data-panel"><div class="panel-heading"><div><h2>User access</h2><p>Roles control POS permissions.</p></div></div><div data-users class="table-content"></div></section>`;
-  if (sessionProfile && sessionProfile.role !== 'Administrator') { app.querySelector('[data-users]').innerHTML = '<div class="empty-state"><h2>Administrator access required</h2></div>'; return; }
-  const { data, error } = await supabase.from('profiles').select('*').order('full_name');
-  if (error) { app.querySelector('[data-users]').innerHTML = failure(error.message); return; }
-  const rows = data || [];
-  app.querySelector('[data-users]').innerHTML = rows.length ? `<div class="table-scroll"><table><thead><tr><th>Name</th><th>Username</th><th>Role</th></tr></thead><tbody>${rows.map(row => `<tr><td>${escapeHtml(row.full_name || '—')}</td><td>${escapeHtml(row.username || '—')}</td><td>${escapeHtml(row.role)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state"><h2>No profiles found</h2></div>';
+  app.innerHTML = `${header()}<section class="data-panel"><div class="panel-heading"><div><h2>Create user</h2><p>Supabase securely stores passwords and user sessions.</p></div></div><form class="sale-form" data-user-form><div class="field-grid"><label>Full name<input name="full_name" required></label><label>Username<input name="username" autocomplete="username" required></label><label>Email<input name="email" type="email" autocomplete="email" required></label><label>Password<input name="password" type="password" minlength="6" autocomplete="new-password" required></label><label>Role<select name="role"><option>Administrator</option><option>Manager</option><option>Cashier</option><option>Inventory Staff</option></select></label></div><button class="button button-primary" type="submit">Create user</button><p class="form-message" data-user-message></p></form></section><section class="data-panel"><div class="panel-heading"><div><h2>User access</h2><p>Roles control POS permissions.</p></div></div><div data-users class="table-content"></div></section>`;
+  if (sessionProfile?.role !== 'Administrator') { app.querySelector('[data-users]').innerHTML = '<div class="empty-state"><h2>Administrator access required</h2></div>'; return; }
+
+  async function loadUsers() {
+    const { data, error } = await supabase.from('profiles').select('*').order('full_name');
+    if (error) { app.querySelector('[data-users]').innerHTML = failure(error.message); return; }
+    const rows = data || [];
+    app.querySelector('[data-users]').innerHTML = rows.length ? `<div class="table-scroll"><table><thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.map(row => `<tr><td>${escapeHtml(row.full_name || '—')}</td><td>${escapeHtml(row.username || '—')}</td><td>${escapeHtml(row.email || '—')}</td><td><select data-role="${row.id}" ${row.id === sessionProfile.id ? 'disabled' : ''}><option ${row.role === 'Administrator' ? 'selected' : ''}>Administrator</option><option ${row.role === 'Manager' ? 'selected' : ''}>Manager</option><option ${row.role === 'Cashier' ? 'selected' : ''}>Cashier</option><option ${row.role === 'Inventory Staff' ? 'selected' : ''}>Inventory Staff</option></select></td><td>${row.active === false ? 'Inactive' : 'Active'}</td><td><button class="button button-secondary" data-toggle-user="${row.id}" ${row.id === sessionProfile.id ? 'disabled' : ''}>${row.active === false ? 'Activate' : 'Deactivate'}</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state"><h2>No profiles found</h2></div>';
+  }
+
+  const form = app.querySelector('[data-user-form]');
+  const message = app.querySelector('[data-user-message]');
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const email = String(data.get('email')).trim().toLowerCase();
+    const username = String(data.get('username')).trim();
+    const password = String(data.get('password'));
+    const fullName = String(data.get('full_name')).trim();
+    const role = String(data.get('role'));
+    if (!username || !email || password.length < 6) { message.textContent = 'Enter a username, valid email, and password of at least 6 characters.'; return; }
+    const usernameCheck = await supabase.from('profiles').select('id').eq('username', username).maybeSingle();
+    if (usernameCheck.data) { message.textContent = 'That username already exists.'; return; }
+    message.textContent = 'Creating secure account…';
+    const { data: { session: administratorSession } } = await supabase.auth.getSession();
+    const { data: created, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { username, full_name: fullName, role } }
+    });
+    if (error) { message.textContent = error.message; return; }
+    if (created.user) {
+      await supabase.from('profiles').upsert({ id: created.user.id, username, full_name: fullName, email, role, active: true });
+    }
+    if (administratorSession && created.session) {
+      await supabase.auth.setSession({
+        access_token: administratorSession.access_token,
+        refresh_token: administratorSession.refresh_token
+      });
+    }
+    message.textContent = 'User account created.';
+    form.reset();
+    await loadUsers();
+  });
+
+  app.querySelector('[data-users]').addEventListener('change', async event => {
+    if (!event.target.dataset.role) return;
+    await supabase.from('profiles').update({ role: event.target.value }).eq('id', event.target.dataset.role);
+    await loadUsers();
+  });
+  app.querySelector('[data-users]').addEventListener('click', async event => {
+    if (!event.target.dataset.toggleUser) return;
+    const id = event.target.dataset.toggleUser;
+    const row = (await supabase.from('profiles').select('active').eq('id', id).maybeSingle()).data;
+    await supabase.from('profiles').update({ active: row?.active === false }).eq('id', id);
+    await loadUsers();
+  });
+  await loadUsers();
 }
 
 async function renderLogin() {
-  app.innerHTML = `<section class="login-panel"><p class="eyebrow">POS SYSTEM</p><h1>Welcome back</h1><p class="page-description">Sign in to your store workspace.</p><form data-login-form><label>Email address<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button class="button button-primary" type="submit">Sign in</button><p class="form-message" data-login-message></p></form></section>`;
+  app.innerHTML = `<section class="login-panel"><p class="eyebrow">POS SYSTEM</p><h1>Welcome back</h1><p class="page-description">Sign in to your store workspace.</p><form data-login-form><label>Username<input name="username" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button class="button button-primary" type="submit">Login</button><p class="form-message" data-login-message></p></form></section>`;
   const form = app.querySelector('[data-login-form]');
   form.addEventListener('submit', async event => {
     event.preventDefault();
     const data = new FormData(form); const message = app.querySelector('[data-login-message]');
+    const credential = String(data.get('username')).trim();
+    const password = String(data.get('password'));
+    if (!credential || !password) { message.textContent = 'Username and password are required.'; return; }
     const button = form.querySelector('button'); button.disabled = true; message.textContent = 'Signing in…';
-    const { error } = await supabase.auth.signInWithPassword({ email: String(data.get('email')), password: String(data.get('password')) });
+
+    let email = credential.includes('@') ? credential : null;
+    if (!email) {
+      const { data: profile, error } = await supabase.from('profiles').select('email, active').eq('username', credential).maybeSingle();
+      if (error || !profile) { button.disabled = false; message.textContent = 'Invalid username or password.'; return; }
+      if (profile.active === false) { button.disabled = false; message.textContent = 'This account is inactive.'; return; }
+      email = profile.email;
+    }
+
+    if (!email) { button.disabled = false; message.textContent = 'This account has no login email.'; return; }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     button.disabled = false;
-    if (error) { message.textContent = error.message; return; }
+    if (error) { message.textContent = 'Invalid username or password.'; return; }
     window.location.href = 'index.html';
   });
 }
 
-await loadProfile();
-if (page === 'login') await renderLogin();
-else if (page === 'dashboard') await renderDashboard();
+const activeSession = await loadProfile();
+if (page === 'login') {
+  if (activeSession) window.location.href = 'index.html';
+  else await renderLogin();
+} else if (!activeSession) {
+  window.location.href = '../login.html';
+} else if (!canAccess(page)) {
+  accessDenied();
+} else if (page === 'dashboard') await renderDashboard();
 else if (page === 'products') await renderProducts();
 else if (page === 'customers') await renderCustomers();
 else if (page === 'sales') await renderSales();
