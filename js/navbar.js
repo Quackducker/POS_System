@@ -4,11 +4,11 @@ const appRoot = new URL('../', import.meta.url);
 const allNavigationItems = [
   { label: 'Dashboard', path: 'index.html', roles: ['Administrator', 'Manager', 'Cashier', 'Inventory Staff'] },
   { label: 'Products', path: 'views/products.html', roles: ['Administrator', 'Manager', 'Inventory Staff'] },
-  { label: 'Customers', path: 'views/customers.html', roles: ['Administrator', 'Manager', 'Cashier'] },
+  { label: 'Customers', path: 'views/customers.html', roles: ['Administrator', 'Cashier'] },
   { label: 'Sales', path: 'views/sales.html', roles: ['Administrator', 'Manager', 'Cashier'] },
-  { label: 'History', path: 'views/history.html', roles: ['Administrator', 'Manager', 'Cashier'] },
+  { label: 'History', path: 'views/history.html', roles: ['Administrator', 'Cashier'] },
   { label: 'Reports', path: 'views/reports.html', roles: ['Administrator', 'Manager'] },
-  { label: 'Users', path: 'views/users.html', roles: ['Administrator'] }
+  { label: 'Users', path: 'views/users.html', roles: ['Administrator', 'Manager'] }
 ];
 
 if (!window.location.pathname.endsWith('/login.html')) {

@@ -186,7 +186,9 @@ grant execute on function public.process_sale(bigint, jsonb, numeric, numeric, t
 
 alter table public.profiles
   add column if not exists email text,
-  add column if not exists active boolean not null default true;
+  add column if not exists active boolean not null default true,
+  add column if not exists approval_status text not null default 'Approved'
+    check (approval_status in ('Pending', 'Approved', 'Rejected'));
 
 create or replace function public.handle_new_auth_user()
 returns trigger
@@ -195,14 +197,15 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, username, full_name, email, role, active)
+  insert into public.profiles (id, username, full_name, email, role, active, approval_status)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'username', split_part(new.email, '@', 1)),
     coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
     new.email,
     coalesce(new.raw_user_meta_data->>'role', 'Cashier'),
-    true
+    coalesce(new.raw_user_meta_data->>'approval_status', 'Approved') = 'Approved',
+    coalesce(new.raw_user_meta_data->>'approval_status', 'Approved')
   )
   on conflict (id) do update set
     username = excluded.username,

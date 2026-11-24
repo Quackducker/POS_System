@@ -7,6 +7,9 @@ const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP'
 const cart = [];
 let sessionProfile = null;
 
+const PENDING_ACCOUNTS_KEY = 'pos_pending_accounts';
+const APPROVED_ACCOUNTS_KEY = 'pos_approved_accounts';
+
 const mockAccounts = {
   admin: { username: 'admin', password: 'admin123', role: 'Administrator', full_name: 'System Administrator' },
   manager: { username: 'manager', password: 'manager123', role: 'Manager', full_name: 'Store Manager' },
@@ -72,12 +75,12 @@ function canAccess(targetPage) {
   const access = {
     dashboard: ['Administrator', 'Manager', 'Cashier', 'Inventory Staff'],
     products: ['Administrator', 'Manager', 'Inventory Staff'],
-    customers: ['Administrator', 'Manager', 'Cashier'],
+    customers: ['Administrator', 'Cashier'],
     sales: ['Administrator', 'Manager', 'Cashier'],
-    history: ['Administrator', 'Manager', 'Cashier'],
-    receipt: ['Administrator', 'Manager', 'Cashier'],
+    history: ['Administrator', 'Cashier'],
+    receipt: ['Administrator', 'Cashier'],
     reports: ['Administrator', 'Manager'],
-    users: ['Administrator']
+    users: ['Administrator', 'Manager']
   };
   return (access[targetPage] || []).includes(role);
 }
@@ -362,53 +365,48 @@ async function renderReports() {
 }
 
 async function renderUsers() {
-  app.innerHTML = `${header()}<section class="data-panel"><div class="panel-heading"><div><h2>Create user</h2><p>Supabase securely stores passwords and user sessions.</p></div></div><form class="sale-form" data-user-form><div class="field-grid"><label>Full name<input name="full_name" required></label><label>Username<input name="username" autocomplete="username" required></label><label>Email<input name="email" type="email" autocomplete="email" required></label><label>Password<input name="password" type="password" minlength="6" autocomplete="new-password" required></label><label>Role<select name="role"><option>Administrator</option><option>Manager</option><option>Cashier</option><option>Inventory Staff</option></select></label></div><button class="button button-primary" type="submit">Create user</button><p class="form-message" data-user-message></p></form></section><section class="data-panel"><div class="panel-heading"><div><h2>User access</h2><p>Roles control POS permissions.</p></div></div><div data-users class="table-content"></div></section>`;
-  if (sessionProfile?.role !== 'Administrator') { app.querySelector('[data-users]').innerHTML = '<div class="empty-state"><h2>Administrator access required</h2></div>'; return; }
+  app.innerHTML = `${header()}<section class="data-panel"><div class="panel-heading"><div><h2>Pending account approvals</h2><p>Approve or reject new account requests.</p></div></div><div data-pending-users class="table-content"></div></section><section class="data-panel"><div class="panel-heading"><div><h2>User access</h2><p>Approved accounts and role assignments.</p></div></div><div data-users class="table-content"></div></section>`;
+  if (!['Administrator', 'Manager'].includes(sessionProfile?.role)) { app.querySelector('[data-pending-users]').innerHTML = '<div class="empty-state"><h2>Manager or Administrator access required</h2></div>'; return; }
+
+  async function loadPendingUsers() {
+    const pending = JSON.parse(localStorage.getItem(PENDING_ACCOUNTS_KEY) || '[]');
+    const container = app.querySelector('[data-pending-users]');
+    container.innerHTML = pending.length
+      ? `<div class="table-scroll"><table><thead><tr><th>Full name</th><th>Username</th><th>Requested role</th><th>Status</th><th>Action</th></tr></thead><tbody>${pending.map(account => `<tr><td>${escapeHtml(account.full_name)}</td><td>${escapeHtml(account.username)}</td><td>${escapeHtml(account.role)}</td><td><span class="status-pending">Pending</span></td><td><button class="button button-primary" data-approve-user="${escapeHtml(account.id)}">Approve</button> <button class="button button-secondary" data-reject-user="${escapeHtml(account.id)}">Reject</button></td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty-state"><h2>No pending accounts</h2><p>New account requests will appear here.</p></div>';
+  }
+
 
   async function loadUsers() {
+    if (sessionProfile?.demo) {
+      const approved = JSON.parse(localStorage.getItem(APPROVED_ACCOUNTS_KEY) || '[]');
+      const rows = Object.values(mockAccounts).map(account => ({
+        full_name: account.full_name,
+        username: account.username,
+        email: 'Demo account',
+        role: account.role,
+        active: true,
+        demo: true
+      })).concat(approved.map(account => ({
+        full_name: account.full_name,
+        username: account.username,
+        email: 'Pending account approved',
+        role: account.role,
+        active: true,
+        demo: true
+      })));
+      app.querySelector('[data-users]').innerHTML = rows.length ? `<div class="table-scroll"><table><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th></tr></thead><tbody>${rows.map(row => `<tr><td>${escapeHtml(row.full_name)}</td><td>${escapeHtml(row.username)}</td><td>${escapeHtml(row.role)}</td><td>Approved</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state"><h2>No users found</h2></div>';
+      return;
+    }
+
     const { data, error } = await supabase.from('profiles').select('*').order('full_name');
     if (error) { app.querySelector('[data-users]').innerHTML = failure(error.message); return; }
     const rows = data || [];
     app.querySelector('[data-users]').innerHTML = rows.length ? `<div class="table-scroll"><table><thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.map(row => `<tr><td>${escapeHtml(row.full_name || '—')}</td><td>${escapeHtml(row.username || '—')}</td><td>${escapeHtml(row.email || '—')}</td><td><select data-role="${row.id}" ${row.id === sessionProfile.id ? 'disabled' : ''}><option ${row.role === 'Administrator' ? 'selected' : ''}>Administrator</option><option ${row.role === 'Manager' ? 'selected' : ''}>Manager</option><option ${row.role === 'Cashier' ? 'selected' : ''}>Cashier</option><option ${row.role === 'Inventory Staff' ? 'selected' : ''}>Inventory Staff</option></select></td><td>${row.active === false ? 'Inactive' : 'Active'}</td><td><button class="button button-secondary" data-toggle-user="${row.id}" ${row.id === sessionProfile.id ? 'disabled' : ''}>${row.active === false ? 'Activate' : 'Deactivate'}</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state"><h2>No profiles found</h2></div>';
   }
 
-  const form = app.querySelector('[data-user-form]');
-  const message = app.querySelector('[data-user-message]');
-  form.addEventListener('submit', async event => {
-    event.preventDefault();
-    const data = new FormData(form);
-    const email = String(data.get('email')).trim().toLowerCase();
-    const username = String(data.get('username')).trim();
-    const password = String(data.get('password'));
-    const fullName = String(data.get('full_name')).trim();
-    const role = String(data.get('role'));
-    if (!username || !email || password.length < 6) { message.textContent = 'Enter a username, valid email, and password of at least 6 characters.'; return; }
-    const usernameCheck = await supabase.from('profiles').select('id').eq('username', username).maybeSingle();
-    if (usernameCheck.data) { message.textContent = 'That username already exists.'; return; }
-    message.textContent = 'Creating secure account…';
-    const { data: { session: administratorSession } } = await supabase.auth.getSession();
-    const { data: created, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { username, full_name: fullName, role } }
-    });
-    if (error) { message.textContent = error.message; return; }
-    if (created.user) {
-      await supabase.from('profiles').upsert({ id: created.user.id, username, full_name: fullName, email, role, active: true });
-    }
-    if (administratorSession && created.session) {
-      await supabase.auth.setSession({
-        access_token: administratorSession.access_token,
-        refresh_token: administratorSession.refresh_token
-      });
-    }
-    message.textContent = 'User account created.';
-    form.reset();
-    await loadUsers();
-  });
-
   app.querySelector('[data-users]').addEventListener('change', async event => {
-    if (!event.target.dataset.role) return;
+    if (!event.target.dataset.role || sessionProfile?.demo) return;
     await supabase.from('profiles').update({ role: event.target.value }).eq('id', event.target.dataset.role);
     await loadUsers();
   });
@@ -419,11 +417,31 @@ async function renderUsers() {
     await supabase.from('profiles').update({ active: row?.active === false }).eq('id', id);
     await loadUsers();
   });
+  await loadPendingUsers();
+  app.querySelector('[data-pending-users]').addEventListener('click', async event => {
+    const approveId = event.target.dataset.approveUser;
+    const rejectId = event.target.dataset.rejectUser;
+    if (!approveId && !rejectId) return;
+    const pending = JSON.parse(localStorage.getItem(PENDING_ACCOUNTS_KEY) || '[]');
+    const targetId = approveId || rejectId;
+    const account = pending.find(item => item.id === targetId);
+    if (!account) return;
+    const remaining = pending.filter(item => item.id !== targetId);
+    localStorage.setItem(PENDING_ACCOUNTS_KEY, JSON.stringify(remaining));
+    if (approveId) {
+      const approved = JSON.parse(localStorage.getItem(APPROVED_ACCOUNTS_KEY) || '[]');
+      approved.push({ ...account, status: 'Approved' });
+      localStorage.setItem(APPROVED_ACCOUNTS_KEY, JSON.stringify(approved));
+    }
+    await loadPendingUsers();
+    await loadUsers();
+  });
+
   await loadUsers();
 }
 
 async function renderLogin() {
-  app.innerHTML = `<section class="login-panel"><p class="eyebrow">POS SYSTEM</p><h1>Welcome back</h1><p class="page-description">Sign in to your store workspace.</p><div data-login-view><form data-login-form><label>Username<input name="username" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button class="button button-primary" type="submit">Login</button><button class="button button-secondary" type="button" data-show-signup>Create account</button><p class="form-message" data-login-message></p></form><div class="mock-accounts"><p class="mock-accounts__title">Demo role accounts</p><div class="mock-accounts__grid"><button type="button" data-mock="admin"><strong>Administrator</strong><span>admin / admin123</span></button><button type="button" data-mock="manager"><strong>Manager</strong><span>manager / manager123</span></button><button type="button" data-mock="cashier"><strong>Cashier</strong><span>cashier / cashier123</span></button><button type="button" data-mock="inventory"><strong>Inventory Staff</strong><span>inventory / inventory123</span></button></div></div></div><div data-signup-view hidden><form data-signup-form><label>Full name<input name="full_name" autocomplete="name" required></label><label>Username<input name="username" autocomplete="username" required></label><label>Email<input name="email" type="email" autocomplete="email" required></label><label>Password<input name="password" type="password" minlength="6" autocomplete="new-password" required></label><button class="button button-primary" type="submit">Create account</button><button class="button button-secondary" type="button" data-show-login>Back to login</button><p class="form-message" data-signup-message></p></form></div></section>`;
+  app.innerHTML = `<section class="login-panel"><p class="eyebrow">POS SYSTEM</p><h1>Welcome back</h1><p class="page-description">Sign in to your store workspace.</p><div data-login-view><form data-login-form><label>Username<input name="username" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button class="button button-primary" type="submit">Login</button><button class="button button-secondary" type="button" data-show-signup>Create account</button><p class="form-message" data-login-message></p></form><div class="mock-accounts"><p class="mock-accounts__title">Demo role accounts</p><div class="mock-accounts__grid"><button type="button" data-mock="admin"><strong>Administrator</strong><span>admin / admin123</span></button><button type="button" data-mock="manager"><strong>Manager</strong><span>manager / manager123</span></button><button type="button" data-mock="cashier"><strong>Cashier</strong><span>cashier / cashier123</span></button><button type="button" data-mock="inventory"><strong>Inventory Staff</strong><span>inventory / inventory123</span></button></div></div></div><div data-signup-view hidden><form data-signup-form><label>Full name<input name="full_name" autocomplete="name" required></label><label>Username<input name="username" autocomplete="username" required></label><label>Password<input name="password" type="password" minlength="6" autocomplete="new-password" required></label><label>Requested role<select name="role"><option>Administrator</option><option>Manager</option><option>Cashier</option><option>Inventory Staff</option></select></label><button class="button button-primary" type="submit">Create account</button><button class="button button-secondary" type="button" data-show-login>Back to login</button><p class="form-message" data-signup-message></p></form></div></section>`;
   const form = app.querySelector('[data-login-form]');
   const loginView = app.querySelector('[data-login-view]');
   const signupView = app.querySelector('[data-signup-view]');
@@ -447,24 +465,31 @@ async function renderLogin() {
     const message = app.querySelector('[data-signup-message]');
     const fullName = String(data.get('full_name')).trim();
     const username = String(data.get('username')).trim();
-    const email = String(data.get('email')).trim().toLowerCase();
     const password = String(data.get('password'));
-    if (!fullName || !username || !email || password.length < 6) {
+    const role = String(data.get('role'));
+    if (!fullName || !username || password.length < 6) {
       message.textContent = 'Complete all fields with a password of at least 6 characters.';
       return;
     }
-    const usernameCheck = await supabase.from('profiles').select('id').eq('username', username).maybeSingle();
-    if (usernameCheck.data) { message.textContent = 'That username already exists.'; return; }
-    const { data: created, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { username, full_name: fullName, role: 'Cashier' } }
-    });
-    if (error) { message.textContent = error.message; return; }
-    if (created.user) {
-      await supabase.from('profiles').upsert({ id: created.user.id, username, full_name: fullName, email, role: 'Cashier', active: true });
+
+    const pending = JSON.parse(localStorage.getItem(PENDING_ACCOUNTS_KEY) || '[]');
+    const approved = JSON.parse(localStorage.getItem(APPROVED_ACCOUNTS_KEY) || '[]');
+    if ([...pending, ...approved].some(account => account.username.toLowerCase() === username.toLowerCase()) || Object.values(mockAccounts).some(account => account.username.toLowerCase() === username.toLowerCase())) {
+      message.textContent = 'That username already exists.';
+      return;
     }
-    message.textContent = 'Cashier account created. You can now log in.';
+
+    pending.push({
+      id: `pending-${Date.now()}-${username.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      full_name: fullName,
+      username,
+      password,
+      role,
+      status: 'Pending',
+      created_at: new Date().toISOString()
+    });
+    localStorage.setItem(PENDING_ACCOUNTS_KEY, JSON.stringify(pending));
+    message.textContent = `Account created and pending approval for the ${role} role.`;
     signupForm.reset();
   });
 
@@ -475,6 +500,29 @@ async function renderLogin() {
     const password = String(data.get('password'));
     if (!credential || !password) { message.textContent = 'Username and password are required.'; return; }
     const button = form.querySelector('button'); button.disabled = true; message.textContent = 'Signing in…';
+
+    const pendingAccounts = JSON.parse(localStorage.getItem(PENDING_ACCOUNTS_KEY) || '[]');
+    const pendingAccount = pendingAccounts.find(account => account.username === credential);
+    if (pendingAccount) {
+      button.disabled = false;
+      message.textContent = 'This account is pending Manager approval.';
+      return;
+    }
+
+    const approvedAccounts = JSON.parse(localStorage.getItem(APPROVED_ACCOUNTS_KEY) || '[]');
+    const approvedAccount = approvedAccounts.find(account => account.username === credential && account.password === password);
+    if (approvedAccount) {
+      localStorage.setItem('pos_demo_profile', JSON.stringify({
+        id: approvedAccount.id,
+        username: approvedAccount.username,
+        full_name: approvedAccount.full_name,
+        role: approvedAccount.role,
+        active: true,
+        demo: true
+      }));
+      window.location.href = 'index.html';
+      return;
+    }
 
     const mockAccount = Object.values(mockAccounts).find(account => account.username === credential && account.password === password);
     if (mockAccount) {
