@@ -565,8 +565,15 @@ tbody tr:hover { background: #f7faf7; }
 .user-edit-dialog form { display: grid; gap: 14px; }
 .user-edit-dialog h2 { margin: 0 0 4px; }
 .user-edit-dialog label { display: grid; gap: 7px; font-size: 0.84rem; font-weight: 700; }
+.user-edit-dialog [hidden] { display: none; }
 .user-edit-dialog input,
 .user-edit-dialog select { min-height: 42px; border: 1px solid #ccd9cf; border-radius: 4px; padding: 0 10px; }
+.user-edit-dialog small { color: var(--muted); font-size: 0.76rem; font-weight: 400; }
+.user-filters { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(2, minmax(160px, 1fr)); gap: 12px; padding: 16px 20px 4px; }
+.user-filters label { display: grid; gap: 6px; color: var(--muted); font-size: 0.78rem; font-weight: 700; }
+.user-filters input,
+.user-filters select { min-height: 40px; width: 100%; border: 1px solid #ccd9cf; border-radius: 4px; background: #fff; padding: 0 10px; color: var(--ink); }
+.user-result-count { margin: 8px 20px; color: var(--muted); font-size: 0.78rem; }
 
 @media (max-width: 900px) {
   .workspace { width: min(100% - 40px, 760px); padding-top: 34px; }
@@ -593,6 +600,8 @@ tbody tr:hover { background: #f7faf7; }
   .quick-panel { padding: 18px 16px 5px; }
   .login-panel { margin-top: 3vh; padding: 25px 21px; }
   .mock-accounts__grid { grid-template-columns: 1fr; }
+  .user-filters { grid-template-columns: 1fr; padding: 14px; }
+  .user-result-count { margin: 8px 14px; }
 }
 
 @media print {

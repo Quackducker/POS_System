@@ -385,7 +385,7 @@ async function renderReports() {
 }
 
 async function renderUsers() {
-  app.innerHTML = `${header()}<section class="data-panel"><div class="panel-heading"><div><h2>Pending account approvals</h2><p>Approve or reject new account requests.</p></div></div><div data-pending-users class="table-content"></div></section><section class="data-panel"><div class="panel-heading"><div><h2>User access</h2><p>Edit approved accounts or deactivate and reactivate access.</p></div></div><div data-users class="table-content"></div></section><dialog class="user-edit-dialog" data-user-dialog><form data-user-form><h2>Edit user account</h2><label>Full name<input name="full_name" required></label><label>Username<input name="username" required></label><label>Role<select name="role"><option>Administrator</option><option>Manager</option><option>Cashier</option><option>Inventory Staff</option></select></label><p class="form-message" data-user-message></p><div class="page-actions"><button class="button button-primary" type="submit">Save changes</button><button class="button button-secondary" type="button" data-close-dialog>Cancel</button></div></form></dialog>`;
+  app.innerHTML = `${header()}<section class="data-panel"><div class="panel-heading"><div><h2>Pending account approvals</h2><p>Approve or reject new account requests.</p></div></div><div data-pending-users class="table-content"></div></section><section class="data-panel"><div class="panel-heading"><div><h2>User access</h2><p>Search and filter accounts, edit details, change passwords, or manage access.</p></div></div><div class="user-filters"><label>Search accounts<input type="search" data-user-search placeholder="Name, username, or email"></label><label>Role<select data-user-role-filter><option value="">All roles</option><option>Administrator</option><option>Manager</option><option>Cashier</option><option>Inventory Staff</option></select></label><label>Status<select data-user-status-filter><option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label></div><p class="user-result-count" data-user-count></p><div data-users class="table-content"></div></section><dialog class="user-edit-dialog" data-user-dialog><form data-user-form><h2>Edit user account</h2><label>Full name<input name="full_name" required></label><label>Username<input name="username" required></label><label>Role<select name="role"><option>Administrator</option><option>Manager</option><option>Cashier</option><option>Inventory Staff</option></select></label><label data-new-password-field>New password<input name="new_password" type="password" minlength="8" autocomplete="new-password"><small>Leave blank to keep the current password. Minimum 8 characters if changing.</small></label><button class="button button-secondary" type="button" data-reset-password hidden>Send password reset email</button><p class="form-message" data-user-message></p><div class="page-actions"><button class="button button-primary" type="submit">Save changes</button><button class="button button-secondary" type="button" data-close-dialog>Cancel</button></div></form></dialog>`;
   if (!['Administrator', 'Manager'].includes(sessionProfile?.role)) { app.querySelector('[data-pending-users]').innerHTML = '<div class="empty-state"><h2>Manager or Administrator access required</h2></div>'; return; }
 
   async function loadPendingUsers() {
@@ -396,6 +396,27 @@ async function renderUsers() {
       : '<div class="empty-state"><h2>No pending accounts</h2><p>New account requests will appear here.</p></div>';
   }
 
+
+  let allUsers = [];
+  function renderUserRows() {
+    const search = app.querySelector('[data-user-search]').value.trim().toLowerCase();
+    const roleFilter = app.querySelector('[data-user-role-filter]').value;
+    const statusFilter = app.querySelector('[data-user-status-filter]').value;
+    const rows = allUsers.filter(row => {
+      const matchesSearch = [row.full_name, row.username, row.email].join(' ').toLowerCase().includes(search);
+      const matchesRole = !roleFilter || row.role === roleFilter;
+      const matchesStatus = !statusFilter || (statusFilter === 'inactive' ? row.active === false : row.active !== false);
+      return matchesSearch && matchesRole && matchesStatus;
+    });
+    app.querySelector('[data-user-count]').textContent = `Showing ${rows.length} of ${allUsers.length} accounts`;
+    app.querySelector('[data-users]').innerHTML = rows.length
+      ? `<div class="table-scroll"><table><thead><tr><th>Name</th><th>Username</th>${!sessionProfile?.demo ? '<th>Email</th>' : ''}<th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows.map(row => {
+        const isCurrentUser = String(row.id) === String(sessionProfile?.id) || row.username === sessionProfile?.username;
+        const attributes = `data-user-id="${escapeHtml(row.id)}" data-user-source="${row.source}"`;
+        return `<tr><td>${escapeHtml(row.full_name || '—')}</td><td>${escapeHtml(row.username || '—')}</td>${!sessionProfile?.demo ? `<td>${escapeHtml(row.email || '—')}</td>` : ''}<td>${escapeHtml(row.role)}</td><td>${row.active === false ? '<span class="status-pending">Inactive</span>' : 'Active'}</td><td><button class="button button-secondary" data-edit-user ${attributes} ${isCurrentUser ? 'disabled' : ''}>Edit</button> <button class="button button-secondary" data-toggle-user ${attributes} ${isCurrentUser ? 'disabled' : ''}>${row.active === false ? 'Activate' : 'Deactivate'}</button> <button class="button button-danger" data-delete-user ${attributes} ${isCurrentUser ? 'disabled' : ''}>Delete</button></td></tr>`;
+      }).join('')}</tbody></table></div>`
+      : '<div class="empty-state"><h2>No matching accounts</h2><p>Try changing the search or filters.</p></div>';
+  }
 
   async function loadUsers() {
     let rows;
@@ -411,19 +432,29 @@ async function renderUsers() {
       rows = (data || []).map(account => ({ ...account, source: 'profile' }));
     }
 
-    const showEmail = !sessionProfile?.demo;
-    app.querySelector('[data-users]').innerHTML = rows.length
-      ? `<div class="table-scroll"><table><thead><tr><th>Name</th><th>Username</th>${showEmail ? '<th>Email</th>' : ''}<th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows.map(row => {
-        const isCurrentUser = String(row.id) === String(sessionProfile?.id) || row.username === sessionProfile?.username;
-        const attributes = `data-user-id="${escapeHtml(row.id)}" data-user-source="${row.source}"`;
-        return `<tr><td>${escapeHtml(row.full_name || '—')}</td><td>${escapeHtml(row.username || '—')}</td>${showEmail ? `<td>${escapeHtml(row.email || '—')}</td>` : ''}<td>${escapeHtml(row.role)}</td><td>${row.active === false ? '<span class="status-pending">Inactive</span>' : 'Active'}</td><td><button class="button button-secondary" data-edit-user ${attributes} ${isCurrentUser ? 'disabled' : ''}>Edit</button> <button class="button button-secondary" data-toggle-user ${attributes} ${isCurrentUser ? 'disabled' : ''}>${row.active === false ? 'Activate' : 'Deactivate'}</button> <button class="button button-danger" data-delete-user ${attributes} ${isCurrentUser ? 'disabled' : ''}>Delete</button></td></tr>`;
-      }).join('')}</tbody></table></div>`
-      : '<div class="empty-state"><h2>No users found</h2></div>';
+    allUsers = rows;
+    renderUserRows();
+  }
+
+  for (const selector of ['[data-user-search]', '[data-user-role-filter]', '[data-user-status-filter]']) {
+    app.querySelector(selector).addEventListener(selector.includes('search') ? 'input' : 'change', renderUserRows);
   }
 
   const dialog = app.querySelector('[data-user-dialog]');
   const userForm = app.querySelector('[data-user-form]');
+  const resetPasswordButton = app.querySelector('[data-reset-password]');
+  const newPasswordField = app.querySelector('[data-new-password-field]');
   app.querySelector('[data-close-dialog]').addEventListener('click', () => dialog.close());
+  resetPasswordButton.addEventListener('click', async () => {
+    const email = userForm.dataset.userEmail;
+    const message = app.querySelector('[data-user-message]');
+    if (!email) { message.textContent = 'This account does not have a reset-email address.'; return; }
+    resetPasswordButton.disabled = true;
+    const redirectTo = new URL('../login.html?reset=1', window.location.href).href;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    resetPasswordButton.disabled = false;
+    message.textContent = error ? error.message : `Password reset email sent to ${email}.`;
+  });
   app.querySelector('[data-users]').addEventListener('click', async event => {
     const button = event.target.closest('button[data-edit-user], button[data-toggle-user], button[data-delete-user]');
     if (!button) return;
@@ -452,7 +483,7 @@ async function renderUsers() {
     if (button.hasAttribute('data-edit-user')) {
       let row;
       if (userSource === 'profile') {
-        const { data, error } = await supabase.from('profiles').select('full_name, username, role').eq('id', userId).maybeSingle();
+        const { data, error } = await supabase.from('profiles').select('full_name, username, role, email').eq('id', userId).maybeSingle();
         if (error || !data) { app.querySelector('[data-users]').insertAdjacentHTML('afterbegin', failure(error?.message || 'Account not found.')); return; }
         row = data;
       } else {
@@ -467,8 +498,12 @@ async function renderUsers() {
       userForm.elements.full_name.value = row.full_name || '';
       userForm.elements.username.value = row.username || '';
       userForm.elements.role.value = row.role;
+      userForm.elements.new_password.value = '';
+      newPasswordField.hidden = userSource === 'profile';
+      resetPasswordButton.hidden = userSource !== 'profile';
       userForm.dataset.userId = userId;
       userForm.dataset.userSource = userSource;
+      userForm.dataset.userEmail = row.email || '';
       app.querySelector('[data-user-message]').textContent = '';
       dialog.showModal();
       return;
@@ -503,8 +538,10 @@ async function renderUsers() {
     const fullName = String(data.get('full_name')).trim();
     const username = String(data.get('username')).trim();
     const role = String(data.get('role'));
+    const newPassword = String(data.get('new_password') || '');
     const message = app.querySelector('[data-user-message]');
     if (!fullName || !username) { message.textContent = 'Name and username are required.'; return; }
+    if (newPassword && newPassword.length < 8) { message.textContent = 'New password must be at least 8 characters.'; return; }
     const { userId, userSource } = userForm.dataset;
 
     if (userSource === 'profile') {
@@ -520,6 +557,7 @@ async function renderUsers() {
       const account = approved.find(item => item.id === userId);
       if (!account) { message.textContent = 'Account not found.'; return; }
       Object.assign(account, { full_name: fullName, username, role });
+      if (newPassword) account.password = newPassword;
       localStorage.setItem(APPROVED_ACCOUNTS_KEY, JSON.stringify(approved));
     } else {
       const accounts = getDemoAccounts();
@@ -531,6 +569,7 @@ async function renderUsers() {
       }
       const saved = JSON.parse(localStorage.getItem(DEMO_ACCOUNTS_KEY) || '{}');
       saved[key] = { ...saved[key], full_name: fullName, username, role };
+      if (newPassword) saved[key].password = newPassword;
       localStorage.setItem(DEMO_ACCOUNTS_KEY, JSON.stringify(saved));
     }
     dialog.close();
@@ -560,6 +599,29 @@ async function renderUsers() {
 }
 
 async function renderLogin() {
+  if (new URLSearchParams(window.location.search).get('reset') === '1') {
+    app.innerHTML = `<section class="login-panel"><p class="eyebrow">POS SYSTEM</p><h1>Set a new password</h1><p class="page-description">Choose a new password for your account.</p><form data-password-reset-form><label>New password<input name="password" type="password" minlength="8" autocomplete="new-password" required></label><label>Confirm new password<input name="confirm_password" type="password" minlength="8" autocomplete="new-password" required></label><button class="button button-primary" type="submit">Update password</button><p class="form-message" data-reset-message aria-live="polite"></p></form></section>`;
+    app.querySelector('[data-password-reset-form]').addEventListener('submit', async event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const password = form.elements.password.value;
+      const message = app.querySelector('[data-reset-message]');
+      if (password.length < 8) { message.textContent = 'Password must be at least 8 characters.'; return; }
+      if (password !== form.elements.confirm_password.value) { message.textContent = 'Passwords do not match.'; return; }
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = true;
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) {
+        button.disabled = false;
+        message.textContent = error.message;
+        return;
+      }
+      await supabase.auth.signOut();
+      window.location.replace('login.html');
+    });
+    return;
+  }
+
   app.innerHTML = `<section class="login-panel"><p class="eyebrow">POS SYSTEM</p><h1>Welcome back</h1><p class="page-description">Sign in to your store workspace.</p><div data-login-view><form data-login-form><label>Username<input name="username" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button class="button button-primary" type="submit">Login</button><button class="button button-secondary" type="button" data-show-signup>Create account</button><p class="form-message" data-login-message></p></form><div class="mock-accounts"><p class="mock-accounts__title">Demo role accounts</p><div class="mock-accounts__grid"><button type="button" data-mock="admin"><strong>Administrator</strong><span>admin / admin123</span></button><button type="button" data-mock="manager"><strong>Manager</strong><span>manager / manager123</span></button><button type="button" data-mock="cashier"><strong>Cashier</strong><span>cashier / cashier123</span></button><button type="button" data-mock="inventory"><strong>Inventory Staff</strong><span>inventory / inventory123</span></button></div></div></div><div data-signup-view hidden><form data-signup-form><label>Full name<input name="full_name" autocomplete="name" required></label><label>Username<input name="username" autocomplete="username" required></label><label>Password<input name="password" type="password" minlength="6" autocomplete="new-password" required></label><label>Requested role<select name="role"><option>Administrator</option><option>Manager</option><option>Cashier</option><option>Inventory Staff</option></select></label><button class="button button-primary" type="submit">Create account</button><button class="button button-secondary" type="button" data-show-login>Back to login</button><p class="form-message" data-signup-message></p></form></div></section>`;
   const form = app.querySelector('[data-login-form]');
   const loginView = app.querySelector('[data-login-view]');
@@ -685,7 +747,8 @@ async function renderLogin() {
 
 const activeSession = await loadProfile();
 if (page === 'login') {
-  if (activeSession) window.location.href = 'index.html';
+  if (new URLSearchParams(window.location.search).get('reset') === '1') await renderLogin();
+  else if (activeSession) window.location.href = 'index.html';
   else await renderLogin();
 } else if (!activeSession) {
   window.location.href = '../login.html';
