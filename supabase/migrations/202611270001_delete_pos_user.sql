@@ -18,8 +18,8 @@ begin
   where profile.id = auth.uid();
 
   if coalesce(v_actor_active, false) is false
-    or coalesce(v_actor_role not in ('Administrator', 'Manager'), true) then
-    raise exception 'Only an active Administrator or Manager can delete user accounts.';
+    or coalesce(v_actor_role <> 'Administrator', true) then
+    raise exception 'Only an active Administrator can delete user accounts.';
   end if;
 
   update public.sales

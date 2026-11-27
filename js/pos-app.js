@@ -93,20 +93,29 @@ async function loadProfile() {
 function canAccess(targetPage) {
   const role = sessionProfile?.role || 'Cashier';
   const access = {
-    dashboard: ['Administrator', 'Manager', 'Cashier', 'Inventory Staff'],
+    dashboard: ['Administrator'],
     products: ['Administrator', 'Manager', 'Inventory Staff'],
-    customers: ['Administrator', 'Cashier'],
+    customers: ['Administrator'],
     sales: ['Administrator', 'Manager', 'Cashier'],
-    history: ['Administrator', 'Cashier'],
+    history: ['Administrator'],
     receipt: ['Administrator', 'Cashier'],
     reports: ['Administrator', 'Manager'],
-    users: ['Administrator', 'Manager']
+    users: ['Administrator']
   };
   return (access[targetPage] || []).includes(role);
 }
 
+function roleLandingUrl(role) {
+  const destination = role === 'Administrator'
+    ? 'index.html'
+    : role === 'Inventory Staff'
+      ? 'views/products.html'
+      : 'views/sales.html';
+  return new URL(destination, new URL('../', import.meta.url)).href;
+}
+
 function accessDenied() {
-  app.innerHTML = `${header()}<div class="empty-state"><span class="empty-symbol">!</span><h2>Access denied</h2><p>Your role does not have permission to open this module.</p><a class="button button-secondary" href="${page === 'dashboard' ? 'index.html' : '../index.html'}">Return to dashboard</a></div>`;
+  app.innerHTML = `${header()}<div class="empty-state"><span class="empty-symbol">!</span><h2>Access denied</h2><p>Your role does not have permission to open this module.</p><a class="button button-secondary" href="${roleLandingUrl(sessionProfile?.role)}">Return to your workspace</a></div>`;
 }
 
 async function renderDashboard() {
@@ -386,7 +395,7 @@ async function renderReports() {
 
 async function renderUsers() {
   app.innerHTML = `<div class="users-page">${header()}<section class="users-section data-panel"><div class="panel-heading users-section__heading"><div class="users-section__title"><span class="users-section__icon users-section__icon--pending" aria-hidden="true">⌛</span><div><h2>Pending approvals</h2><p>Review and approve new account requests.</p></div></div><span class="users-count users-count--pending" data-pending-count>0 pending</span></div><div data-pending-users class="table-content"></div></section><section class="users-section data-panel"><div class="panel-heading users-section__heading"><div class="users-section__title"><span class="users-section__icon" aria-hidden="true">♙</span><div><h2>Account directory</h2><p>Manage account details, roles, passwords, and access.</p></div></div><span class="users-count" data-user-count>0 accounts</span></div><div class="user-filters"><label class="user-search"><span aria-hidden="true">⌕</span><input type="search" data-user-search placeholder="Search name, username, or email" aria-label="Search accounts"></label><label>Role<select data-user-role-filter aria-label="Filter by role"><option value="">All roles</option><option>Administrator</option><option>Manager</option><option>Cashier</option><option>Inventory Staff</option></select></label><label>Status<select data-user-status-filter aria-label="Filter by status"><option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label></div><div data-users class="table-content"></div></section></div><dialog class="user-edit-dialog" data-user-dialog><form data-user-form><span class="eyebrow">ACCOUNT SETTINGS</span><h2>Edit user account</h2><p class="user-edit-intro">Update this team member’s profile and access.</p><label>Full name<input name="full_name" required></label><label>Username<input name="username" required></label><label>Role<select name="role"><option>Administrator</option><option>Manager</option><option>Cashier</option><option>Inventory Staff</option></select></label><label data-new-password-field>New password<input name="new_password" type="password" minlength="8" autocomplete="new-password"><small>Leave blank to keep current password. Use at least 8 characters.</small></label><button class="button button-secondary user-reset-button" type="button" data-reset-password hidden>Send password reset email</button><p class="form-message" data-user-message></p><div class="user-edit-actions"><button class="button button-primary" type="submit">Save changes</button><button class="button button-secondary" type="button" data-close-dialog>Cancel</button></div></form></dialog>`;
-  if (!['Administrator', 'Manager'].includes(sessionProfile?.role)) { app.querySelector('[data-pending-users]').innerHTML = '<div class="empty-state"><h2>Manager or Administrator access required</h2></div>'; return; }
+  if (sessionProfile?.role !== 'Administrator') { app.querySelector('[data-pending-users]').innerHTML = '<div class="empty-state"><h2>Administrator access required</h2></div>'; return; }
 
   async function loadPendingUsers() {
     const pending = JSON.parse(localStorage.getItem(PENDING_ACCOUNTS_KEY) || '[]');
@@ -708,7 +717,7 @@ async function renderLogin() {
         active: approvedAccount.active !== false,
         demo: true
       }));
-      window.location.href = 'index.html';
+      window.location.href = roleLandingUrl(approvedAccount.role);
       return;
     }
 
@@ -727,7 +736,7 @@ async function renderLogin() {
         active: true,
         demo: true
       }));
-      window.location.href = 'index.html';
+      window.location.href = roleLandingUrl(mockAccount.role);
       return;
     }
 
@@ -743,14 +752,21 @@ async function renderLogin() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     button.disabled = false;
     if (error) { message.textContent = 'Invalid username or password.'; return; }
-    window.location.href = 'index.html';
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: profile, error: profileError } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+    if (profileError || !profile) {
+      await supabase.auth.signOut();
+      message.textContent = profileError?.message || 'Could not load your account role.';
+      return;
+    }
+    window.location.href = roleLandingUrl(profile.role);
   });
 }
 
 const activeSession = await loadProfile();
 if (page === 'login') {
   if (new URLSearchParams(window.location.search).get('reset') === '1') await renderLogin();
-  else if (activeSession) window.location.href = 'index.html';
+  else if (activeSession) window.location.href = roleLandingUrl(sessionProfile?.role);
   else await renderLogin();
 } else if (!activeSession) {
   window.location.href = '../login.html';

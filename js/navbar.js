@@ -2,13 +2,13 @@ import { supabase } from '../supabase.js';
 
 const appRoot = new URL('../', import.meta.url);
 const allNavigationItems = [
-  { label: 'Dashboard', path: 'index.html', roles: ['Administrator', 'Manager', 'Cashier', 'Inventory Staff'] },
+  { label: 'Dashboard', path: 'index.html', roles: ['Administrator'] },
   { label: 'Products', path: 'views/products.html', roles: ['Administrator', 'Manager', 'Inventory Staff'] },
-  { label: 'Customers', path: 'views/customers.html', roles: ['Administrator', 'Cashier'] },
+  { label: 'Customers', path: 'views/customers.html', roles: ['Administrator'] },
   { label: 'Sales', path: 'views/sales.html', roles: ['Administrator', 'Manager', 'Cashier'] },
-  { label: 'History', path: 'views/history.html', roles: ['Administrator', 'Cashier'] },
+  { label: 'History', path: 'views/history.html', roles: ['Administrator'] },
   { label: 'Reports', path: 'views/reports.html', roles: ['Administrator', 'Manager'] },
-  { label: 'Users', path: 'views/users.html', roles: ['Administrator', 'Manager'] }
+  { label: 'Users', path: 'views/users.html', roles: ['Administrator'] }
 ];
 
 if (!window.location.pathname.endsWith('/login.html')) {
