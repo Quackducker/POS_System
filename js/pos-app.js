@@ -9,6 +9,7 @@ let sessionProfile = null;
 
 const PENDING_ACCOUNTS_KEY = 'pos_pending_accounts';
 const APPROVED_ACCOUNTS_KEY = 'pos_approved_accounts';
+const DEMO_ACCOUNTS_KEY = 'pos_demo_accounts';
 
 const mockAccounts = {
   admin: { username: 'admin', password: 'admin123', role: 'Administrator', full_name: 'System Administrator' },
@@ -16,6 +17,14 @@ const mockAccounts = {
   cashier: { username: 'cashier', password: 'cashier123', role: 'Cashier', full_name: 'Store Cashier' },
   inventory: { username: 'inventory', password: 'inventory123', role: 'Inventory Staff', full_name: 'Inventory Staff' }
 };
+
+function getDemoAccounts() {
+  const stored = JSON.parse(localStorage.getItem(DEMO_ACCOUNTS_KEY) || '{}');
+  return Object.fromEntries(Object.entries(mockAccounts).map(([key, account]) => [
+    key,
+    { ...account, ...stored[key], id: `demo-${key}`, active: stored[key]?.active !== false }
+  ]));
+}
 
 const pageInfo = {
   dashboard: ['OVERVIEW', 'Dashboard', 'Your store activity and inventory at a glance.'],
@@ -51,7 +60,18 @@ async function loadProfile() {
   const demoProfile = localStorage.getItem('pos_demo_profile');
   if (demoProfile) {
     try {
-      sessionProfile = JSON.parse(demoProfile);
+      const savedProfile = JSON.parse(demoProfile);
+      const account = savedProfile.id?.startsWith('demo-')
+        ? Object.values(getDemoAccounts()).find(item => item.id === savedProfile.id || item.username === savedProfile.username)
+        : JSON.parse(localStorage.getItem(APPROVED_ACCOUNTS_KEY) || '[]').find(item => item.id === savedProfile.id);
+      if (account?.active === false) {
+        localStorage.removeItem('pos_demo_profile');
+        return null;
+      }
+      sessionProfile = account
+        ? { ...savedProfile, username: account.username, full_name: account.full_name, role: account.role, active: account.active }
+        : savedProfile;
+      localStorage.setItem('pos_demo_profile', JSON.stringify(sessionProfile));
       return { demo: true };
     } catch {
       localStorage.removeItem('pos_demo_profile');
@@ -365,7 +385,7 @@ async function renderReports() {
 }
 
 async function renderUsers() {
-  app.innerHTML = `${header()}<section class="data-panel"><div class="panel-heading"><div><h2>Pending account approvals</h2><p>Approve or reject new account requests.</p></div></div><div data-pending-users class="table-content"></div></section><section class="data-panel"><div class="panel-heading"><div><h2>User access</h2><p>Approved accounts and role assignments.</p></div></div><div data-users class="table-content"></div></section>`;
+  app.innerHTML = `${header()}<section class="data-panel"><div class="panel-heading"><div><h2>Pending account approvals</h2><p>Approve or reject new account requests.</p></div></div><div data-pending-users class="table-content"></div></section><section class="data-panel"><div class="panel-heading"><div><h2>User access</h2><p>Edit approved accounts or deactivate and reactivate access.</p></div></div><div data-users class="table-content"></div></section><dialog class="user-edit-dialog" data-user-dialog><form data-user-form><h2>Edit user account</h2><label>Full name<input name="full_name" required></label><label>Username<input name="username" required></label><label>Role<select name="role"><option>Administrator</option><option>Manager</option><option>Cashier</option><option>Inventory Staff</option></select></label><p class="form-message" data-user-message></p><div class="page-actions"><button class="button button-primary" type="submit">Save changes</button><button class="button button-secondary" type="button" data-close-dialog>Cancel</button></div></form></dialog>`;
   if (!['Administrator', 'Manager'].includes(sessionProfile?.role)) { app.querySelector('[data-pending-users]').innerHTML = '<div class="empty-state"><h2>Manager or Administrator access required</h2></div>'; return; }
 
   async function loadPendingUsers() {
@@ -378,43 +398,121 @@ async function renderUsers() {
 
 
   async function loadUsers() {
+    let rows;
     if (sessionProfile?.demo) {
       const approved = JSON.parse(localStorage.getItem(APPROVED_ACCOUNTS_KEY) || '[]');
-      const rows = Object.values(mockAccounts).map(account => ({
-        full_name: account.full_name,
-        username: account.username,
-        email: 'Demo account',
-        role: account.role,
-        active: true,
-        demo: true
-      })).concat(approved.map(account => ({
-        full_name: account.full_name,
-        username: account.username,
-        email: 'Pending account approved',
-        role: account.role,
-        active: true,
-        demo: true
-      })));
-      app.querySelector('[data-users]').innerHTML = rows.length ? `<div class="table-scroll"><table><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th></tr></thead><tbody>${rows.map(row => `<tr><td>${escapeHtml(row.full_name)}</td><td>${escapeHtml(row.username)}</td><td>${escapeHtml(row.role)}</td><td>Approved</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state"><h2>No users found</h2></div>';
+      rows = [
+        ...Object.values(getDemoAccounts()).map(account => ({ ...account, source: 'demo' })),
+        ...approved.map(account => ({ ...account, active: account.active !== false, source: 'approved' }))
+      ];
+    } else {
+      const { data, error } = await supabase.from('profiles').select('*').order('full_name');
+      if (error) { app.querySelector('[data-users]').innerHTML = failure(error.message); return; }
+      rows = (data || []).map(account => ({ ...account, source: 'profile' }));
+    }
+
+    const showEmail = !sessionProfile?.demo;
+    app.querySelector('[data-users]').innerHTML = rows.length
+      ? `<div class="table-scroll"><table><thead><tr><th>Name</th><th>Username</th>${showEmail ? '<th>Email</th>' : ''}<th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows.map(row => {
+        const isCurrentUser = String(row.id) === String(sessionProfile?.id) || row.username === sessionProfile?.username;
+        const attributes = `data-user-id="${escapeHtml(row.id)}" data-user-source="${row.source}"`;
+        return `<tr><td>${escapeHtml(row.full_name || '—')}</td><td>${escapeHtml(row.username || '—')}</td>${showEmail ? `<td>${escapeHtml(row.email || '—')}</td>` : ''}<td>${escapeHtml(row.role)}</td><td>${row.active === false ? '<span class="status-pending">Inactive</span>' : 'Active'}</td><td><button class="button button-secondary" data-edit-user ${attributes} ${isCurrentUser ? 'disabled' : ''}>Edit</button> <button class="button button-secondary" data-toggle-user ${attributes} ${isCurrentUser ? 'disabled' : ''}>${row.active === false ? 'Activate' : 'Deactivate'}</button></td></tr>`;
+      }).join('')}</tbody></table></div>`
+      : '<div class="empty-state"><h2>No users found</h2></div>';
+  }
+
+  const dialog = app.querySelector('[data-user-dialog]');
+  const userForm = app.querySelector('[data-user-form]');
+  app.querySelector('[data-close-dialog]').addEventListener('click', () => dialog.close());
+  app.querySelector('[data-users]').addEventListener('click', async event => {
+    const button = event.target.closest('button[data-edit-user], button[data-toggle-user]');
+    if (!button) return;
+    const { userId, userSource } = button.dataset;
+    if (button.hasAttribute('data-edit-user')) {
+      let row;
+      if (userSource === 'profile') {
+        const { data, error } = await supabase.from('profiles').select('full_name, username, role').eq('id', userId).maybeSingle();
+        if (error || !data) { app.querySelector('[data-users]').insertAdjacentHTML('afterbegin', failure(error?.message || 'Account not found.')); return; }
+        row = data;
+      } else {
+        const accounts = userSource === 'approved'
+          ? JSON.parse(localStorage.getItem(APPROVED_ACCOUNTS_KEY) || '[]')
+          : Object.values(getDemoAccounts());
+        row = userSource === 'approved'
+          ? accounts.find(account => account.id === userId)
+          : accounts.find(account => account.id === userId);
+      }
+      if (!row) return;
+      userForm.elements.full_name.value = row.full_name || '';
+      userForm.elements.username.value = row.username || '';
+      userForm.elements.role.value = row.role;
+      userForm.dataset.userId = userId;
+      userForm.dataset.userSource = userSource;
+      app.querySelector('[data-user-message]').textContent = '';
+      dialog.showModal();
       return;
     }
 
-    const { data, error } = await supabase.from('profiles').select('*').order('full_name');
-    if (error) { app.querySelector('[data-users]').innerHTML = failure(error.message); return; }
-    const rows = data || [];
-    app.querySelector('[data-users]').innerHTML = rows.length ? `<div class="table-scroll"><table><thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.map(row => `<tr><td>${escapeHtml(row.full_name || '—')}</td><td>${escapeHtml(row.username || '—')}</td><td>${escapeHtml(row.email || '—')}</td><td><select data-role="${row.id}" ${row.id === sessionProfile.id ? 'disabled' : ''}><option ${row.role === 'Administrator' ? 'selected' : ''}>Administrator</option><option ${row.role === 'Manager' ? 'selected' : ''}>Manager</option><option ${row.role === 'Cashier' ? 'selected' : ''}>Cashier</option><option ${row.role === 'Inventory Staff' ? 'selected' : ''}>Inventory Staff</option></select></td><td>${row.active === false ? 'Inactive' : 'Active'}</td><td><button class="button button-secondary" data-toggle-user="${row.id}" ${row.id === sessionProfile.id ? 'disabled' : ''}>${row.active === false ? 'Activate' : 'Deactivate'}</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state"><h2>No profiles found</h2></div>';
-  }
-
-  app.querySelector('[data-users]').addEventListener('change', async event => {
-    if (!event.target.dataset.role || sessionProfile?.demo) return;
-    await supabase.from('profiles').update({ role: event.target.value }).eq('id', event.target.dataset.role);
+    if (!window.confirm(`${button.textContent} this account?`)) return;
+    if (userSource === 'profile') {
+      const { data: row, error: readError } = await supabase.from('profiles').select('active').eq('id', userId).maybeSingle();
+      if (readError || !row) { app.querySelector('[data-users]').insertAdjacentHTML('afterbegin', failure(readError?.message || 'Account not found.')); return; }
+      const { error } = await supabase.from('profiles').update({ active: row.active === false }).eq('id', userId);
+      if (error) { app.querySelector('[data-users]').insertAdjacentHTML('afterbegin', failure(error.message)); return; }
+    } else if (userSource === 'approved') {
+      const approved = JSON.parse(localStorage.getItem(APPROVED_ACCOUNTS_KEY) || '[]');
+      const account = approved.find(item => item.id === userId);
+      if (!account) return;
+      account.active = account.active === false;
+      localStorage.setItem(APPROVED_ACCOUNTS_KEY, JSON.stringify(approved));
+    } else {
+      const saved = JSON.parse(localStorage.getItem(DEMO_ACCOUNTS_KEY) || '{}');
+      const key = userId.replace(/^demo-/, '');
+      const account = getDemoAccounts()[key];
+      if (!account) return;
+      saved[key] = { ...saved[key], active: account.active === false };
+      localStorage.setItem(DEMO_ACCOUNTS_KEY, JSON.stringify(saved));
+    }
     await loadUsers();
   });
-  app.querySelector('[data-users]').addEventListener('click', async event => {
-    if (!event.target.dataset.toggleUser) return;
-    const id = event.target.dataset.toggleUser;
-    const row = (await supabase.from('profiles').select('active').eq('id', id).maybeSingle()).data;
-    await supabase.from('profiles').update({ active: row?.active === false }).eq('id', id);
+
+  userForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const data = new FormData(userForm);
+    const fullName = String(data.get('full_name')).trim();
+    const username = String(data.get('username')).trim();
+    const role = String(data.get('role'));
+    const message = app.querySelector('[data-user-message]');
+    if (!fullName || !username) { message.textContent = 'Name and username are required.'; return; }
+    const { userId, userSource } = userForm.dataset;
+
+    if (userSource === 'profile') {
+      const { error } = await supabase.from('profiles').update({ full_name: fullName, username, role }).eq('id', userId);
+      if (error) { message.textContent = error.message; return; }
+    } else if (userSource === 'approved') {
+      const approved = JSON.parse(localStorage.getItem(APPROVED_ACCOUNTS_KEY) || '[]');
+      if (approved.some(account => account.id !== userId && account.username.toLowerCase() === username.toLowerCase()) ||
+          Object.values(getDemoAccounts()).some(account => account.username.toLowerCase() === username.toLowerCase())) {
+        message.textContent = 'That username is already in use.';
+        return;
+      }
+      const account = approved.find(item => item.id === userId);
+      if (!account) { message.textContent = 'Account not found.'; return; }
+      Object.assign(account, { full_name: fullName, username, role });
+      localStorage.setItem(APPROVED_ACCOUNTS_KEY, JSON.stringify(approved));
+    } else {
+      const accounts = getDemoAccounts();
+      const key = userId.replace(/^demo-/, '');
+      if (Object.entries(accounts).some(([otherKey, account]) => otherKey !== key && account.username.toLowerCase() === username.toLowerCase()) ||
+          JSON.parse(localStorage.getItem(APPROVED_ACCOUNTS_KEY) || '[]').some(account => account.username.toLowerCase() === username.toLowerCase())) {
+        message.textContent = 'That username is already in use.';
+        return;
+      }
+      const saved = JSON.parse(localStorage.getItem(DEMO_ACCOUNTS_KEY) || '{}');
+      saved[key] = { ...saved[key], full_name: fullName, username, role };
+      localStorage.setItem(DEMO_ACCOUNTS_KEY, JSON.stringify(saved));
+    }
+    dialog.close();
     await loadUsers();
   });
   await loadPendingUsers();
@@ -430,7 +528,7 @@ async function renderUsers() {
     localStorage.setItem(PENDING_ACCOUNTS_KEY, JSON.stringify(remaining));
     if (approveId) {
       const approved = JSON.parse(localStorage.getItem(APPROVED_ACCOUNTS_KEY) || '[]');
-      approved.push({ ...account, status: 'Approved' });
+      approved.push({ ...account, status: 'Approved', active: true });
       localStorage.setItem(APPROVED_ACCOUNTS_KEY, JSON.stringify(approved));
     }
     await loadPendingUsers();
@@ -512,22 +610,32 @@ async function renderLogin() {
     const approvedAccounts = JSON.parse(localStorage.getItem(APPROVED_ACCOUNTS_KEY) || '[]');
     const approvedAccount = approvedAccounts.find(account => account.username === credential && account.password === password);
     if (approvedAccount) {
+      if (approvedAccount.active === false) {
+        button.disabled = false;
+        message.textContent = 'This account is inactive.';
+        return;
+      }
       localStorage.setItem('pos_demo_profile', JSON.stringify({
         id: approvedAccount.id,
         username: approvedAccount.username,
         full_name: approvedAccount.full_name,
         role: approvedAccount.role,
-        active: true,
+        active: approvedAccount.active !== false,
         demo: true
       }));
       window.location.href = 'index.html';
       return;
     }
 
-    const mockAccount = Object.values(mockAccounts).find(account => account.username === credential && account.password === password);
+    const mockAccount = Object.values(getDemoAccounts()).find(account => account.username === credential && account.password === password);
     if (mockAccount) {
+      if (mockAccount.active === false) {
+        button.disabled = false;
+        message.textContent = 'This account is inactive.';
+        return;
+      }
       localStorage.setItem('pos_demo_profile', JSON.stringify({
-        id: `demo-${mockAccount.role.toLowerCase().replaceAll(' ', '-')}`,
+        id: mockAccount.id,
         username: mockAccount.username,
         full_name: mockAccount.full_name,
         role: mockAccount.role,
