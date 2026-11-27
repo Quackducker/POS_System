@@ -263,8 +263,55 @@ async function renderCustomers() {
   await load();
 }
 
+function createProductSearch({ container, products, getReservedQuantity, onSelect }) {
+  const categories = [...new Set(products.map(product => String(product.category || '').trim()).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right));
+  container.innerHTML = `<div class="product-search"><div class="product-search__controls"><label class="product-search__query">Search product<input type="search" data-product-query placeholder="Product name or code" autocomplete="off"></label><label>Category<select data-product-category><option value="">All categories</option>${categories.map(category => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join('')}</select></label></div><div class="product-search__summary" data-product-summary></div><div class="sale-items" data-product-results></div></div>`;
+
+  const queryInput = container.querySelector('[data-product-query]');
+  const categorySelect = container.querySelector('[data-product-category]');
+  const results = container.querySelector('[data-product-results]');
+  const summary = container.querySelector('[data-product-summary]');
+
+  function render() {
+    const query = queryInput.value.trim().toLowerCase();
+    const category = categorySelect.value;
+    const matching = products.filter(product => {
+      const matchesQuery = [product.product_name, product.product_code].some(value => String(value || '').toLowerCase().includes(query));
+      const matchesCategory = !category || String(product.category || '').trim() === category;
+      return matchesQuery && matchesCategory;
+    });
+
+    summary.textContent = `${matching.length} product${matching.length === 1 ? '' : 's'} · Low-stock items are marked`;
+    results.innerHTML = matching.length
+      ? `<div class="table-scroll product-search__table"><div class="sale-item-head"><span>Code</span><span>Product</span><span>Category</span><span>Price</span><span>Available</span><span></span></div>${matching.map(product => {
+        const stock = Math.max(Number(product.quantity) - getReservedQuantity(product.product_id), 0);
+        const lowStock = Number(product.quantity) <= Number(product.reorder_level || 0);
+        const outOfStock = stock < 1;
+        const stockLabel = outOfStock
+          ? '<span class="product-stock product-stock--empty">Out</span>'
+          : `<span class="product-stock ${lowStock ? 'product-stock--low' : ''}">${stock}${lowStock ? ' · Low' : ''}</span>`;
+        return `<div class="sale-item-row${lowStock ? ' sale-item-row--low' : ''}"><span class="product-code">${escapeHtml(product.product_code || '—')}</span><span class="product-name">${escapeHtml(product.product_name)}</span><span class="product-category">${escapeHtml(product.category || '—')}</span><span>${peso.format(product.price)}</span>${stockLabel}<button class="button button-secondary" type="button" data-add-product="${escapeHtml(product.product_id)}" ${outOfStock ? 'disabled' : ''}>${outOfStock ? 'Out' : 'Add'}</button></div>`;
+      }).join('')}</div>`
+      : '<div class="product-search__empty">No products match your search.</div>';
+  }
+
+  queryInput.addEventListener('input', render);
+  categorySelect.addEventListener('change', render);
+  results.addEventListener('click', event => {
+    const button = event.target.closest('button[data-add-product]');
+    if (!button || button.disabled) return;
+    const product = products.find(item => String(item.product_id) === button.dataset.addProduct);
+    if (!product || Number(product.quantity) - getReservedQuantity(product.product_id) < 1) return;
+    onSelect(product);
+    render();
+  });
+
+  return { render };
+}
+
 async function renderSales() {
-  app.innerHTML = `${header('<button class="button button-secondary" type="button" data-clear>Clear cart</button>')}<section class="sale-layout"><article class="data-panel sale-terminal"><div class="panel-heading"><div><h2>Current transaction</h2><p>Select a customer and add products.</p></div><span class="live-indicator">LIVE</span></div><div class="sale-form"><div class="field-grid"><label>Customer<select name="customer_id" data-customer><option value="">Walk-in customer</option></select></label><label>Search product<input type="search" data-product-search placeholder="Name or product code"></label></div><div data-product-list class="sale-items"></div></div></article><aside class="receipt-card"><p class="eyebrow">SUMMARY</p><h2>Order total</h2><div class="summary-row"><span>Subtotal</span><strong data-subtotal>₱0.00</strong></div><label class="payment-field">Discount <input type="number" min="0" step="0.01" value="0" data-discount></label><label class="payment-field">Tax <input type="number" min="0" step="0.01" value="0" data-tax></label><div class="summary-row total"><span>Total</span><strong data-total>₱0.00</strong></div><label class="payment-field">Payment method<select data-method><option>Cash</option><option>Card</option><option>E-wallet</option></select></label><label class="payment-field">Cash / amount<input type="number" min="0" step="0.01" value="0" data-paid></label><div class="summary-row"><span>Change</span><strong data-change>₱0.00</strong></div><button class="button button-primary wide" type="button" data-checkout>Complete payment</button><p class="form-message" data-sale-message></p></aside></section><section class="data-panel"><div class="panel-heading"><div><h2>Shopping cart</h2><p data-cart-count>0 items</p></div></div><div data-cart class="table-content"></div></section>`;
+  app.innerHTML = `${header('<button class="button button-secondary" type="button" data-clear>Clear cart</button>')}<section class="sale-layout"><article class="data-panel sale-terminal"><div class="panel-heading"><div><h2>Current transaction</h2><p>Select a customer and add products.</p></div><span class="live-indicator">LIVE</span></div><div class="sale-form"><label class="sale-customer">Customer<select name="customer_id" data-customer><option value="">Walk-in customer</option></select></label><div data-product-search-widget></div></div></article><aside class="receipt-card"><p class="eyebrow">SUMMARY</p><h2>Order total</h2><div class="summary-row"><span>Subtotal</span><strong data-subtotal>₱0.00</strong></div><label class="payment-field">Discount <input type="number" min="0" step="0.01" value="0" data-discount></label><label class="payment-field">Tax <input type="number" min="0" step="0.01" value="0" data-tax></label><div class="summary-row total"><span>Total</span><strong data-total>₱0.00</strong></div><label class="payment-field">Payment method<select data-method><option>Cash</option><option>Card</option><option>E-wallet</option></select></label><label class="payment-field">Cash / amount<input type="number" min="0" step="0.01" value="0" data-paid></label><div class="summary-row"><span>Change</span><strong data-change>₱0.00</strong></div><button class="button button-primary wide" type="button" data-checkout>Complete payment</button><p class="form-message" data-sale-message></p></aside></section><section class="data-panel"><div class="panel-heading"><div><h2>Shopping cart</h2><p data-cart-count>0 items</p></div></div><div data-cart class="table-content"></div></section>`;
   let products = [];
   const [productResult, customerResult] = await Promise.all([
     supabase.from('products').select('*').eq('status', 'Active').order('product_name'),
@@ -278,6 +325,10 @@ async function renderSales() {
     option.textContent = `${customer.customer_name}${customer.customer_code ? ` (${customer.customer_code})` : ''}`;
     customerSelect.append(option);
   }
+  if (productResult.error) {
+    app.querySelector('[data-product-search-widget]').innerHTML = failure(productResult.error.message);
+    return;
+  }
   function subtotal() { return cart.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0); }
   function totals() { const discount = Math.max(Number(app.querySelector('[data-discount]').value) || 0, 0); const tax = Math.max(Number(app.querySelector('[data-tax]').value) || 0, 0); return { discount, tax, total: Math.max(subtotal() - discount + tax, 0) }; }
   function renderCart() {
@@ -288,22 +339,18 @@ async function renderSales() {
     const paid = Math.max(Number(app.querySelector('[data-paid]').value) || 0, 0);
     app.querySelector('[data-change]').textContent = peso.format(Math.max(paid - total.total, 0));
     app.querySelector('[data-cart]').innerHTML = cart.length ? `<div class="table-scroll"><table><thead><tr><th>Product</th><th>Quantity</th><th>Price</th><th>Subtotal</th><th>Action</th></tr></thead><tbody>${cart.map(item => `<tr><td>${escapeHtml(item.product_name)}</td><td><input class="cart-qty" type="number" min="1" max="${item.quantity_available}" data-qty="${item.product_id}" value="${item.quantity}"></td><td>${peso.format(item.price)}</td><td>${peso.format(item.price * item.quantity)}</td><td><button class="button button-secondary" data-remove="${item.product_id}">Remove</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state"><h2>Cart is empty</h2><p>Add an available product from the list.</p></div>';
+    productSearch?.render();
   }
-  function renderProducts(term = '') {
-    const filtered = products.filter(item => [item.product_code, item.product_name, item.category].join(' ').toLowerCase().includes(term.toLowerCase()));
-    app.querySelector('[data-product-list]').innerHTML = filtered.length ? `<div class="sale-item-head"><span>Item</span><span>Stock</span><span>Price</span><span>Action</span></div>${filtered.map(item => `<div class="sale-item-row"><span>${escapeHtml(item.product_name)}</span><span>${item.quantity}</span><span>${peso.format(item.price)}</span><button class="button button-secondary" data-add="${item.product_id}" ${item.quantity < 1 ? 'disabled' : ''}>Add</button></div>`).join('')}` : '<div class="empty-state"><h2>No products found</h2></div>';
-  }
-  app.querySelector('[data-product-search]').addEventListener('input', event => renderProducts(event.target.value));
-  app.querySelector('[data-product-list]').addEventListener('click', event => {
-    if (!event.target.dataset.add) return;
-    const product = products.find(item => String(item.product_id) === event.target.dataset.add);
-    if (!product || product.quantity < 1) return;
-    const existing = cart.find(item => item.product_id === product.product_id);
-    if (existing) {
-      if (existing.quantity >= product.quantity) return;
-      existing.quantity += 1;
-    } else cart.push({ product_id: product.product_id, product_name: product.product_name, price: Number(product.price), quantity: 1, quantity_available: product.quantity });
-    renderCart();
+  const productSearch = createProductSearch({
+    container: app.querySelector('[data-product-search-widget]'),
+    products,
+    getReservedQuantity: productId => cart.find(item => String(item.product_id) === String(productId))?.quantity || 0,
+    onSelect: product => {
+      const existing = cart.find(item => String(item.product_id) === String(product.product_id));
+      if (existing) existing.quantity += 1;
+      else cart.push({ product_id: product.product_id, product_name: product.product_name, price: Number(product.price), quantity: 1, quantity_available: Number(product.quantity) });
+      renderCart();
+    }
   });
   app.querySelector('[data-cart]').addEventListener('input', event => {
     if (!event.target.dataset.qty) return;
@@ -347,7 +394,7 @@ async function renderSales() {
     sessionStorage.setItem('pos_receipt_sale_id', String(sale.sale_id));
     window.location.href = `receipt.html?id=${encodeURIComponent(sale.sale_id)}`;
   });
-  renderProducts(); renderCart();
+  renderCart();
 }
 
 async function renderReceipt() {
