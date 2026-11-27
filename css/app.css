@@ -273,6 +273,8 @@ h1 {
 .button-primary:hover { background: #174f46; }
 .button-secondary { border-color: var(--line); background: #fff; color: var(--ink); }
 .button-secondary:hover { background: #f4f8f4; }
+.button-danger { border-color: #b94a48; background: #fff; color: #9c302f; }
+.button-danger:hover { background: #fff1f0; }
 .button:disabled { cursor: wait; opacity: 0.65; }
 .button[hidden] { display: none; }
 

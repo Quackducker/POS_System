@@ -20,7 +20,7 @@ const mockAccounts = {
 
 function getDemoAccounts() {
   const stored = JSON.parse(localStorage.getItem(DEMO_ACCOUNTS_KEY) || '{}');
-  return Object.fromEntries(Object.entries(mockAccounts).map(([key, account]) => [
+  return Object.fromEntries(Object.entries(mockAccounts).filter(([key]) => stored[key]?.deleted !== true).map(([key, account]) => [
     key,
     { ...account, ...stored[key], id: `demo-${key}`, active: stored[key]?.active !== false }
   ]));
@@ -64,7 +64,7 @@ async function loadProfile() {
       const account = savedProfile.id?.startsWith('demo-')
         ? Object.values(getDemoAccounts()).find(item => item.id === savedProfile.id || item.username === savedProfile.username)
         : JSON.parse(localStorage.getItem(APPROVED_ACCOUNTS_KEY) || '[]').find(item => item.id === savedProfile.id);
-      if (account?.active === false) {
+      if (savedProfile.demo && (!account || account.active === false)) {
         localStorage.removeItem('pos_demo_profile');
         return null;
       }
@@ -416,7 +416,7 @@ async function renderUsers() {
       ? `<div class="table-scroll"><table><thead><tr><th>Name</th><th>Username</th>${showEmail ? '<th>Email</th>' : ''}<th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows.map(row => {
         const isCurrentUser = String(row.id) === String(sessionProfile?.id) || row.username === sessionProfile?.username;
         const attributes = `data-user-id="${escapeHtml(row.id)}" data-user-source="${row.source}"`;
-        return `<tr><td>${escapeHtml(row.full_name || '—')}</td><td>${escapeHtml(row.username || '—')}</td>${showEmail ? `<td>${escapeHtml(row.email || '—')}</td>` : ''}<td>${escapeHtml(row.role)}</td><td>${row.active === false ? '<span class="status-pending">Inactive</span>' : 'Active'}</td><td><button class="button button-secondary" data-edit-user ${attributes} ${isCurrentUser ? 'disabled' : ''}>Edit</button> <button class="button button-secondary" data-toggle-user ${attributes} ${isCurrentUser ? 'disabled' : ''}>${row.active === false ? 'Activate' : 'Deactivate'}</button></td></tr>`;
+        return `<tr><td>${escapeHtml(row.full_name || '—')}</td><td>${escapeHtml(row.username || '—')}</td>${showEmail ? `<td>${escapeHtml(row.email || '—')}</td>` : ''}<td>${escapeHtml(row.role)}</td><td>${row.active === false ? '<span class="status-pending">Inactive</span>' : 'Active'}</td><td><button class="button button-secondary" data-edit-user ${attributes} ${isCurrentUser ? 'disabled' : ''}>Edit</button> <button class="button button-secondary" data-toggle-user ${attributes} ${isCurrentUser ? 'disabled' : ''}>${row.active === false ? 'Activate' : 'Deactivate'}</button> <button class="button button-danger" data-delete-user ${attributes} ${isCurrentUser ? 'disabled' : ''}>Delete</button></td></tr>`;
       }).join('')}</tbody></table></div>`
       : '<div class="empty-state"><h2>No users found</h2></div>';
   }
@@ -425,9 +425,30 @@ async function renderUsers() {
   const userForm = app.querySelector('[data-user-form]');
   app.querySelector('[data-close-dialog]').addEventListener('click', () => dialog.close());
   app.querySelector('[data-users]').addEventListener('click', async event => {
-    const button = event.target.closest('button[data-edit-user], button[data-toggle-user]');
+    const button = event.target.closest('button[data-edit-user], button[data-toggle-user], button[data-delete-user]');
     if (!button) return;
     const { userId, userSource } = button.dataset;
+    if (button.hasAttribute('data-delete-user')) {
+      if (!window.confirm('Permanently delete this account? This cannot be undone.')) return;
+      if (userSource === 'profile') {
+        const { error } = await supabase.rpc('delete_pos_user', { p_user_id: userId });
+        if (error) {
+          app.querySelector('[data-users]').insertAdjacentHTML('afterbegin', failure(error.message));
+          return;
+        }
+      } else if (userSource === 'approved') {
+        const approved = JSON.parse(localStorage.getItem(APPROVED_ACCOUNTS_KEY) || '[]');
+        localStorage.setItem(APPROVED_ACCOUNTS_KEY, JSON.stringify(approved.filter(account => account.id !== userId)));
+      } else {
+        const key = userId.replace(/^demo-/, '');
+        const saved = JSON.parse(localStorage.getItem(DEMO_ACCOUNTS_KEY) || '{}');
+        saved[key] = { ...saved[key], deleted: true };
+        localStorage.setItem(DEMO_ACCOUNTS_KEY, JSON.stringify(saved));
+      }
+      await loadUsers();
+      return;
+    }
+
     if (button.hasAttribute('data-edit-user')) {
       let row;
       if (userSource === 'profile') {

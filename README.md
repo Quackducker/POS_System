@@ -19,6 +19,7 @@ This project implements the construction and integration work through Laboratory
 - Role-based access and complete module integration
 
 Run `supabase/migrations/202611240001_laboratories_1_to_17_pos.sql` in the Supabase SQL Editor before using the POS transaction flow.
+Run `supabase/migrations/202611270001_delete_pos_user.sql` afterward to enable secure permanent deletion of Supabase user accounts.
 
 Laboratories 18 onward are intentionally not included.
 
