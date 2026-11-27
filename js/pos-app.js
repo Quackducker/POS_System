@@ -742,7 +742,8 @@ async function renderLogin() {
 
     let email = credential.includes('@') ? credential : null;
     if (!email) {
-      const { data: profile, error } = await supabase.from('profiles').select('email, active').eq('username', credential).maybeSingle();
+      const { data, error } = await supabase.rpc('lookup_login_account', { p_username: credential });
+      const profile = data?.[0];
       if (error || !profile) { button.disabled = false; message.textContent = 'Invalid username or password.'; return; }
       if (profile.active === false) { button.disabled = false; message.textContent = 'This account is inactive.'; return; }
       email = profile.email;
