@@ -489,6 +489,8 @@ tbody tr:hover { background: #f7faf7; }
 .customer-status::before { width: 6px; height: 6px; border-radius: 50%; background: currentColor; content: ''; }
 .customer-status--active { background: #edf7ef; color: #39744f; }
 .customer-status--inactive { background: #f1f2f0; color: #747d76; }
+.customer-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.customer-row-actions .button { min-height: 34px; padding: 0 10px; font-size: 0.72rem; }
 .print-receipt { max-width: 600px; margin: 0 auto; padding: 24px; text-align: left; }
 .print-receipt h2, .print-receipt > p { text-align: center; }
 .print-receipt hr { border: 0; border-top: 1px dashed var(--line); }

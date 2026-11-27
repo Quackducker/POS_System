@@ -224,7 +224,7 @@ async function renderCustomers() {
   }
   function renderTable(items) {
     app.querySelector('[data-count]').textContent = `${items.length} customers`;
-    app.querySelector('[data-table]').innerHTML = items.length ? `<div class="table-scroll"><table><thead><tr><th>Code</th><th>Name</th><th>Contact</th><th>Email</th><th>Address</th><th>Status</th><th>Actions</th></tr></thead><tbody>${items.map(item => `<tr><td>${escapeHtml(item.customer_code || '—')}</td><td>${escapeHtml(item.customer_name)}</td><td>${escapeHtml(item.contact_number || '—')}</td><td>${escapeHtml(item.email || '—')}</td><td>${escapeHtml(item.address || '—')}</td><td><span class="customer-status ${item.status === 'Inactive' ? 'customer-status--inactive' : 'customer-status--active'}">${escapeHtml(item.status || 'Active')}</span></td><td><button class="button button-secondary" data-edit="${item.customer_id}">Edit</button> <button class="button button-secondary" data-toggle-customer="${item.customer_id}" data-status="${escapeHtml(item.status || 'Active')}">${item.status === 'Inactive' ? 'Activate' : 'Deactivate'}</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state"><h2>No customers found</h2></div>';
+    app.querySelector('[data-table]').innerHTML = items.length ? `<div class="table-scroll"><table><thead><tr><th>Code</th><th>Name</th><th>Contact</th><th>Email</th><th>Address</th><th>Status</th><th>Actions</th></tr></thead><tbody>${items.map(item => `<tr><td>${escapeHtml(item.customer_code || '—')}</td><td>${escapeHtml(item.customer_name)}</td><td>${escapeHtml(item.contact_number || '—')}</td><td>${escapeHtml(item.email || '—')}</td><td>${escapeHtml(item.address || '—')}</td><td><span class="customer-status ${item.status === 'Inactive' ? 'customer-status--inactive' : 'customer-status--active'}">${escapeHtml(item.status || 'Active')}</span></td><td><div class="customer-row-actions"><button class="button button-secondary" data-edit="${item.customer_id}">Edit</button><button class="button button-secondary" data-toggle-customer="${item.customer_id}">${item.status === 'Inactive' ? 'Activate' : 'Deactivate'}</button><button class="button button-danger" data-delete-customer="${item.customer_id}">Delete</button></div></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state"><h2>No customers found</h2></div>';
   }
   app.querySelector('[data-search]').addEventListener('input', event => {
     const term = event.target.value.trim().toLowerCase();
@@ -264,20 +264,52 @@ async function renderCustomers() {
     }
 
     const toggleButton = event.target.closest('button[data-toggle-customer]');
-    if (!toggleButton) return;
-    const customer = rows.find(row => String(row.customer_id) === toggleButton.dataset.toggleCustomer);
-    if (!customer) return;
-    const nextStatus = customer.status === 'Inactive' ? 'Active' : 'Inactive';
-    const action = nextStatus === 'Inactive' ? 'deactivate' : 'reactivate';
-    if (!window.confirm(`Are you sure you want to ${action} ${customer.customer_name}?`)) return;
-    toggleButton.disabled = true;
-    const { error } = await supabase.from('customers').update({ status: nextStatus }).eq('customer_id', customer.customer_id);
-    if (error) {
-      message.textContent = error.message;
-      toggleButton.disabled = false;
+    if (toggleButton) {
+      const customer = rows.find(row => String(row.customer_id) === toggleButton.dataset.toggleCustomer);
+      if (!customer) return;
+      const nextStatus = customer.status === 'Inactive' ? 'Active' : 'Inactive';
+      const action = nextStatus === 'Inactive' ? 'deactivate' : 'reactivate';
+      if (!window.confirm(`Are you sure you want to ${action} ${customer.customer_name}?`)) return;
+      toggleButton.disabled = true;
+      const { error } = await supabase.from('customers').update({ status: nextStatus }).eq('customer_id', customer.customer_id);
+      if (error) {
+        message.textContent = error.message;
+        toggleButton.disabled = false;
+        return;
+      }
+      message.textContent = `Customer ${nextStatus.toLowerCase()}.`;
+      await load();
       return;
     }
-    message.textContent = `Customer ${nextStatus.toLowerCase()}.`;
+
+    const deleteButton = event.target.closest('button[data-delete-customer]');
+    if (!deleteButton) return;
+    const customer = rows.find(row => String(row.customer_id) === deleteButton.dataset.deleteCustomer);
+    if (!customer) return;
+
+    const { data: sales, error: salesError } = await supabase
+      .from('sales')
+      .select('sale_id')
+      .eq('customer_id', customer.customer_id)
+      .limit(1);
+    if (salesError) {
+      message.textContent = `Could not check the customer's sales history: ${salesError.message}`;
+      return;
+    }
+    if (sales?.length) {
+      message.textContent = 'This customer has sales history and cannot be deleted. Deactivate the customer to keep transaction records.';
+      return;
+    }
+    if (!window.confirm(`Permanently delete ${customer.customer_name}? This cannot be undone.`)) return;
+
+    deleteButton.disabled = true;
+    const { error } = await supabase.from('customers').delete().eq('customer_id', customer.customer_id);
+    if (error) {
+      message.textContent = error.message;
+      deleteButton.disabled = false;
+      return;
+    }
+    message.textContent = 'Customer deleted.';
     await load();
   });
   await load();
