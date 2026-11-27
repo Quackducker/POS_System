@@ -485,6 +485,10 @@ tbody tr:hover { background: #f7faf7; }
 .payment-field option { color: var(--ink); }
 .cart-qty { width: 72px; min-height: 36px; border: 1px solid #cad7ce; border-radius: 4px; padding: 0 8px; }
 .stock-low { color: #a85b22; }
+.customer-status { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 5px 9px; font-size: 0.7rem; font-weight: 700; }
+.customer-status::before { width: 6px; height: 6px; border-radius: 50%; background: currentColor; content: ''; }
+.customer-status--active { background: #edf7ef; color: #39744f; }
+.customer-status--inactive { background: #f1f2f0; color: #747d76; }
 .print-receipt { max-width: 600px; margin: 0 auto; padding: 24px; text-align: left; }
 .print-receipt h2, .print-receipt > p { text-align: center; }
 .print-receipt hr { border: 0; border-top: 1px dashed var(--line); }

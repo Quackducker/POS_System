@@ -224,7 +224,7 @@ async function renderCustomers() {
   }
   function renderTable(items) {
     app.querySelector('[data-count]').textContent = `${items.length} customers`;
-    app.querySelector('[data-table]').innerHTML = items.length ? `<div class="table-scroll"><table><thead><tr><th>Code</th><th>Name</th><th>Contact</th><th>Email</th><th>Address</th><th>Action</th></tr></thead><tbody>${items.map(item => `<tr><td>${escapeHtml(item.customer_code || '—')}</td><td>${escapeHtml(item.customer_name)}</td><td>${escapeHtml(item.contact_number || '—')}</td><td>${escapeHtml(item.email || '—')}</td><td>${escapeHtml(item.address || '—')}</td><td><button class="button button-secondary" data-edit="${item.customer_id}">Edit</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state"><h2>No customers found</h2></div>';
+    app.querySelector('[data-table]').innerHTML = items.length ? `<div class="table-scroll"><table><thead><tr><th>Code</th><th>Name</th><th>Contact</th><th>Email</th><th>Address</th><th>Status</th><th>Actions</th></tr></thead><tbody>${items.map(item => `<tr><td>${escapeHtml(item.customer_code || '—')}</td><td>${escapeHtml(item.customer_name)}</td><td>${escapeHtml(item.contact_number || '—')}</td><td>${escapeHtml(item.email || '—')}</td><td>${escapeHtml(item.address || '—')}</td><td><span class="customer-status ${item.status === 'Inactive' ? 'customer-status--inactive' : 'customer-status--active'}">${escapeHtml(item.status || 'Active')}</span></td><td><button class="button button-secondary" data-edit="${item.customer_id}">Edit</button> <button class="button button-secondary" data-toggle-customer="${item.customer_id}" data-status="${escapeHtml(item.status || 'Active')}">${item.status === 'Inactive' ? 'Activate' : 'Deactivate'}</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state"><h2>No customers found</h2></div>';
   }
   app.querySelector('[data-search]').addEventListener('input', event => {
     const term = event.target.value.trim().toLowerCase();
@@ -241,7 +241,7 @@ async function renderCustomers() {
       contact_number: String(data.get('contact_number')).trim() || null,
       email: String(data.get('email')).trim() || null,
       address: String(data.get('address')).trim() || null,
-      status: 'Active'
+      status: id ? rows.find(row => String(row.customer_id) === String(id))?.status || 'Active' : 'Active'
     };
     if (!customer.customer_name) { message.textContent = 'Customer name is required.'; return; }
     if (customer.customer_code && rows.some(row => row.customer_code === customer.customer_code && String(row.customer_id) !== String(id))) { message.textContent = 'That customer code already exists.'; return; }
@@ -253,12 +253,32 @@ async function renderCustomers() {
     form.reset(); form.elements.customer_id.value = '';
     await load();
   });
-  app.querySelector('[data-table]').addEventListener('click', event => {
-    if (!event.target.dataset.edit) return;
-    const item = rows.find(row => String(row.customer_id) === event.target.dataset.edit);
-    if (!item) return;
-    for (const name of ['customer_code', 'customer_name', 'contact_number', 'email', 'address']) form.elements[name].value = item[name] ?? '';
-    form.elements.customer_id.value = item.customer_id;
+  app.querySelector('[data-table]').addEventListener('click', async event => {
+    const editButton = event.target.closest('button[data-edit]');
+    if (editButton) {
+      const item = rows.find(row => String(row.customer_id) === editButton.dataset.edit);
+      if (!item) return;
+      for (const name of ['customer_code', 'customer_name', 'contact_number', 'email', 'address']) form.elements[name].value = item[name] ?? '';
+      form.elements.customer_id.value = item.customer_id;
+      return;
+    }
+
+    const toggleButton = event.target.closest('button[data-toggle-customer]');
+    if (!toggleButton) return;
+    const customer = rows.find(row => String(row.customer_id) === toggleButton.dataset.toggleCustomer);
+    if (!customer) return;
+    const nextStatus = customer.status === 'Inactive' ? 'Active' : 'Inactive';
+    const action = nextStatus === 'Inactive' ? 'deactivate' : 'reactivate';
+    if (!window.confirm(`Are you sure you want to ${action} ${customer.customer_name}?`)) return;
+    toggleButton.disabled = true;
+    const { error } = await supabase.from('customers').update({ status: nextStatus }).eq('customer_id', customer.customer_id);
+    if (error) {
+      message.textContent = error.message;
+      toggleButton.disabled = false;
+      return;
+    }
+    message.textContent = `Customer ${nextStatus.toLowerCase()}.`;
+    await load();
   });
   await load();
 }
